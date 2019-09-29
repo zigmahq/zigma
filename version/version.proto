@@ -1,0 +1,8 @@
+syntax = "proto3";
+package version;
+
+message Version {
+    string number = 1;
+    string name = 2;
+    bytes signature = 3;
+}
