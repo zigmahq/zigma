@@ -10,8 +10,7 @@ import (
 )
 
 var cfg = []byte(`
-p2p:
-  peer_id: 12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+p2p: {}
 `)
 
 func TestRead(t *testing.T) {
@@ -20,7 +19,6 @@ func TestRead(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c)
 	assert.NotNil(t, c.P2P)
-	assert.Equal(t, "12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM", c.P2P.PeerID)
 }
 
 func TestFromFile(t *testing.T) {
@@ -37,5 +35,4 @@ func TestFromFile(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c)
 	assert.NotNil(t, c.P2P)
-	assert.Equal(t, "12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM", c.P2P.PeerID)
 }

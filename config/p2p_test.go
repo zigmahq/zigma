@@ -9,12 +9,25 @@ import (
 
 var p2pcfg = []byte(`
 p2p:
-  peer_id: 12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
-  listen_addrs:
-    - /ip4/0.0.0.0/tcp
-    - /ip6/::/tcp
-  bootstrap_addrs:
-    - "/ip4/127.0.0.1/tcp/1000/ipfs/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM"
+  priv_key: config/node_priv.key
+  gossip: true
+  relay: true
+  min_num_conns: 200
+  max_num_conns: 1000
+  laddr: tcp://0.0.0.0:0
+  persistent_peers:
+    - tcp://0:0/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+  seeds:
+    - tcp://0:0
+    - tcp://0:0/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+    - tcp://0.0.0.0:0/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+    - tcp://127.0.0.1:1000/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+    - ws://0:0/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+    - ws://:::0/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+    - tcp://:::8000/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+    - tcp://::2:0/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
+    - tcp://::2:0/12D
+    - tcp://0:0:0/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM
 `)
 
 func TestP2PUnmarshal(t *testing.T) {
@@ -23,10 +36,17 @@ func TestP2PUnmarshal(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, c)
 	assert.NotNil(t, c.P2P)
-	assert.Equal(t, "12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM", c.P2P.PeerID)
-	assert.Len(t, c.P2P.ListenAddrs, 2)
-	assert.Equal(t, "/ip4/0.0.0.0/tcp", c.P2P.ListenAddrs[0])
-	assert.Equal(t, "/ip6/::/tcp", c.P2P.ListenAddrs[1])
-	assert.Len(t, c.P2P.BootstrapAddrs, 1)
-	assert.Equal(t, "/ip4/127.0.0.1/tcp/1000/ipfs/12D3KooWHvpXAvv68Pjysw2jYNSY4feWRCYRBUw9wJSeg2PRa7BM", c.P2P.BootstrapAddrs[0].MustMultiaddr().String())
+	assert.NotPanics(t, func() {
+		_ = c.P2P.Seeds[0].MustMultiaddr()
+		_ = c.P2P.Seeds[1].MustMultiaddr()
+		_ = c.P2P.Seeds[2].MustMultiaddr()
+		_ = c.P2P.Seeds[3].MustMultiaddr()
+		_ = c.P2P.Seeds[4].MustMultiaddr()
+		_ = c.P2P.Seeds[5].MustMultiaddr()
+		_ = c.P2P.Seeds[6].MustMultiaddr()
+	})
+	assert.Panics(t, func() {
+		_ = c.P2P.Seeds[7].MustMultiaddr()
+		_ = c.P2P.Seeds[8].MustMultiaddr()
+	})
 }

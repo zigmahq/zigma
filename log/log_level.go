@@ -2,8 +2,12 @@ package log
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
+
+// lvl sets current logging level
+var lvl = LogInfo
 
 // Level defines the importance and urgency of the log message
 type Level int
@@ -55,8 +59,20 @@ func (l Level) String() string {
 
 // LevelFromString returns the log level enum from a string
 func LevelFromString(s string) Level {
-	if l, ok := logLevelIds[s]; ok {
+	if l, ok := logLevelIds[strings.ToLower(s)]; ok {
 		return l
 	}
 	panic("unrecognized log level")
+}
+
+// SetLevel sets the logging verbose level
+func SetLevel(l Level) {
+	lvl = l
+}
+
+func init() {
+	l, ok := os.LookupEnv("LOG_LEVEL")
+	if ok {
+		lvl = LevelFromString(l)
+	}
 }

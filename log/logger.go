@@ -10,6 +10,7 @@ import (
 // Logger implements a simple logging interface
 type Logger interface {
 	ID() string
+	NL()
 	Trace(string, ...Field)
 	Debug(string, ...Field)
 	Info(string, ...Field)
@@ -23,6 +24,9 @@ type logger struct {
 }
 
 func (l *logger) print(r *Record) {
+	if r.Level > lvl {
+		return
+	}
 	os.Stdout.WriteString(r.String())
 }
 
@@ -38,6 +42,10 @@ func (l *logger) log(lv Level, msg string, fields ...Field) {
 
 func (l *logger) ID() string {
 	return l.id
+}
+
+func (l *logger) NL() {
+	os.Stdout.WriteString("\n")
 }
 
 func (l *logger) Trace(msg string, fields ...Field) {

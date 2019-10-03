@@ -48,6 +48,11 @@ func (f Field) Value() string {
 	}
 }
 
+// Tag returns a field that contains string data
+func Tag(s string) Field {
+	return Field{Type: StringType, String: s}
+}
+
 // Binary returns a field that contains bytes data
 func Binary(k string, b []byte) Field {
 	return Field{Key: k, Type: BinaryType, Binary: b}

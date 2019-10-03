@@ -1,202 +1,215 @@
 package p2p
 
 import (
-	"bufio"
 	"context"
-	"fmt"
-	"log"
-	"sync"
-	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-autonat-svc"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p/p2p/discovery"
 	"github.com/zigmahq/zigma/config"
+	"github.com/zigmahq/zigma/log"
+	"golang.org/x/time/rate"
 
 	circuit "github.com/libp2p/go-libp2p-circuit"
 	connmgr "github.com/libp2p/go-libp2p-connmgr"
-	routing "github.com/libp2p/go-libp2p-core/routing"
+	rdisc "github.com/libp2p/go-libp2p-discovery"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	mplex "github.com/libp2p/go-libp2p-mplex"
+	dhtopts "github.com/libp2p/go-libp2p-kad-dht/opts"
 	pstoremem "github.com/libp2p/go-libp2p-peerstore/pstoremem"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	psrouter "github.com/libp2p/go-libp2p-pubsub-router"
+	quic "github.com/libp2p/go-libp2p-quic-transport"
 	secio "github.com/libp2p/go-libp2p-secio"
-	yamux "github.com/libp2p/go-libp2p-yamux"
-	rhost "github.com/libp2p/go-libp2p/p2p/host/routed"
+	mdns "github.com/libp2p/go-libp2p/p2p/discovery"
 )
 
-// ZNode encapsulates a zigma peer-to-peer node
-type ZNode struct {
-	// the node identifier
-	id peer.ID
-	// private key for encrypted communication and verifying identity
-	privateKey crypto.PrivKey
-	// p2p node configurations
-	cfg *config.P2P
-	// the base context for the p2p node
-	ctx context.Context
-	// host for p2p connections
-	host host.Host
-	// online state
+// PubSubFn function type for pubsub
+type PubSubFn func(ctx context.Context, h host.Host, opts ...pubsub.Option) (*pubsub.PubSub, error)
+
+// P2P encapsulates a peer-to-peer server
+type P2P struct {
+	id               peer.ID
+	privateKey       crypto.PrivKey
+	cfg              *config.P2P
+	ctx              context.Context
+	host             host.Host
+	close            chan struct{}
+	peers            int
 	online           bool
-	routing          routing.Routing
-	routedhost       *rhost.RoutedHost
+	logger           log.Logger
 	autonat          *autonat.AutoNATService
-	discovery        discovery.Service
-	pubsub           *pubsub.PubSub
-	psrouter         *psrouter.PubsubValueStore
+	psfn             PubSubFn
+	pubs             *pubsub.PubSub
+	subs             *pubsub.Subscription
+	discovery        mdns.Service
 	dht              *dht.IpfsDHT
 	networkNotifee   *networkNotifee
 	discoveryNotifee *discoveryNotifee
+	limiter          *rate.Limiter
 }
 
-// ID returns the node peer id
-func (n *ZNode) ID() string {
+// ID returns the server peer id
+func (n *P2P) ID() string {
 	return n.id.String()
 }
 
-// Close shuts down the host, its Network, and services.
-func (n *ZNode) Close() error {
-	n.online = false
-	return n.host.Close()
+// Host returns node basic host
+func (n *P2P) Host() host.Host {
+	return n.host
 }
 
-func (n *ZNode) handleStream(stream network.Stream) {
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-	go func() {
-		for {
-			s, err := rw.ReadString('\n')
-			if err != nil {
-				continue
-			}
-			if len(s) == 0 {
-				continue
-			}
-			if s != "\n" {
-				fmt.Printf("\x1b[32m%s\x1b[0m>", s)
-			}
-		}
-	}()
-}
-
-func (n *ZNode) bootstrapPeerDiscovery() error {
-	if len(n.cfg.BootstrapAddrs) == 0 {
-		return nil
+// Start runs the znode server
+func (n *P2P) Start() error {
+	n.logger.Info("Node id: " + n.ID())
+	n.logger.Info("Using default protocol \"" + string(ZProtocolID) + "\"")
+	if addrs := n.cfg.Address; len(addrs) > 0 {
+		n.logger.Info("Listening for new connections on:")
 	}
-	var errs []error
-	var wg sync.WaitGroup
-	for _, addr := range n.cfg.BootstrapAddrs {
-		wg.Add(1)
-		go func(addr config.P2PMultiAddr) {
-			defer wg.Done()
-			m, err := addr.Multiaddr()
-			if err != nil {
-				return
-			}
-			p, err := peer.AddrInfoFromP2pAddr(m)
-			if err != nil {
-				return
-			}
-			if err := n.host.Connect(n.ctx, *p); err != nil {
-				errs = append(errs, err)
-			}
-		}(addr)
+	for _, addr := range n.cfg.Address {
+		n.logger.Info("> " + addr.String())
 	}
-	wg.Wait()
-	if len(errs) > 0 {
-		return errs[0]
-	}
+	n.online = true
 	return nil
 }
 
-func (n *ZNode) bootstrapDHT() error {
-	return n.dht.Bootstrap(n.ctx)
-}
-
-func (n *ZNode) boostrapMDNS() error {
-	discovery, err := discovery.NewMdnsService(n.ctx, n.host, time.Second*5, ZMDNSServiceName)
-	if err != nil {
+// Stop shuts down the host, its Network, and services.
+func (n *P2P) Stop() error {
+	close(n.close)
+	n.online = false
+	fs := []log.Field{log.Tag("kademlia")}
+	if n.discovery != nil {
+		fs = append(fs, log.Tag("mdns"))
+	}
+	n.logger.Info("Stopping peer discovery", fs...)
+	if n.discovery != nil {
+		if err := n.discovery.Close(); err != nil {
+			return err
+		}
+	}
+	if err := n.dht.Close(); err != nil {
 		return err
 	}
-	n.discovery = discovery
-
-	// Implement and attach discovery notifee interface to receive
-	// notifications from mdns service
-	n.discovery.RegisterNotifee(n.discoveryNotifee)
+	n.logger.Info("Stopping p2p server")
+	if err := n.host.Close(); err != nil {
+		return err
+	}
 	return nil
 }
 
-// NewZNode initializes and returns a zigma node
-func NewZNode(ctx context.Context, p2pconf *config.P2P) (*ZNode, error) {
-	node := &ZNode{
-		ctx: ctx,
-		cfg: p2pconf,
+// JoinOverlay triggers the host to join the DHT overlay
+func (n *P2P) JoinOverlay(ctx context.Context) {
+	rd := rdisc.NewRoutingDiscovery(n.dht)
+	rdisc.Advertise(ctx, rd, string(ZProtocolID))
+}
+
+// NewServer initializes and returns a zigma node
+func NewServer(ctx context.Context, logger log.Logger, p2pconf *config.P2P) (*P2P, error) {
+	priv, err := p2pconf.DecodePrivateKey()
+	if err != nil {
+		return nil, err
 	}
-	node.networkNotifee = &networkNotifee{node}
-	node.discoveryNotifee = &discoveryNotifee{node}
 
 	id, err := p2pconf.DecodePeerID()
 	if err != nil {
 		return nil, err
 	}
-	node.id = id
 
-	priv, err := p2pconf.DecodePrivateKey()
+	addrs, err := p2pconf.DecodeListenAddrs()
 	if err != nil {
 		return nil, err
 	}
-	node.privateKey = priv
 
 	ps := pstoremem.NewPeerstore()
-	ps.AddPrivKey(node.id, priv)
-	ps.AddPubKey(node.id, priv.GetPublic())
+	ps.AddPrivKey(id, priv)
+	ps.AddPubKey(id, priv.GetPublic())
 
 	opts := []libp2p.Option{
 		libp2p.Identity(priv),
+		libp2p.UserAgent(p2pconf.Name),
 		libp2p.Security(secio.ID, secio.New),
 		libp2p.Peerstore(ps),
-		libp2p.ListenAddrStrings(p2pconf.Addrs()...),
-		libp2p.EnableRelay(circuit.OptHop, circuit.OptDiscovery),
-		libp2p.ConnectionManager(connmgr.NewConnManager(1000, 4000, time.Minute)),
-		libp2p.ChainOptions(
-			libp2p.Muxer("/yamux/1.0.0", yamux.DefaultTransport),
-			libp2p.Muxer("/mplex/6.7.0", mplex.DefaultTransport),
-		),
+		libp2p.ListenAddrs(addrs...),
+		libp2p.ConnectionManager(connmgr.NewConnManager(p2pconf.MinNumConns, p2pconf.MaxNumConns, p2pconf.ConnGracePeriod)),
+		libp2p.DefaultMuxers,
+		libp2p.DefaultTransports,
 	}
 
-	node.host, err = libp2p.New(ctx, opts...)
+	switch p2pconf.Relay {
+	case config.RelayActive:
+		opts = append(opts, libp2p.EnableRelay(circuit.OptActive, circuit.OptHop), libp2p.NATPortMap())
+	case config.RelayNat:
+		opts = append(opts, libp2p.EnableRelay(), libp2p.NATPortMap())
+	default:
+		opts = append(opts, libp2p.DisableRelay())
+	}
+
+	logger.Info("QUIC transport protocol", log.Bool("active", p2pconf.QUIC))
+	if p2pconf.QUIC {
+		opts = append(opts, libp2p.Transport(quic.NewTransport))
+	}
+
+	host, err := libp2p.New(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	// Implemenet and attach network notifee interface to receive
-	// notifications from a Network.
-	node.host.Network().Notify(node.networkNotifee)
-	log.Printf("# %s/p2p/%s\n", node.host.Addrs()[0], node.ID())
+	dht, err := dht.New(ctx, host, dhtopts.Protocols(ZProtocolID))
+	if err != nil {
+		return nil, err
+	}
+	if err := dht.Bootstrap(ctx); err != nil {
+		return nil, err
+	}
 
-	node.autonat, err = autonat.NewAutoNATService(ctx, node.host)
+	autonat, err := autonat.NewAutoNATService(ctx, host)
 	if err != nil {
 		return nil, err
 	}
 
-	node.host.SetStreamHandler(ZProtocolID, node.handleStream)
-	node.online = true
+	p2p := &P2P{
+		id:         id,
+		privateKey: priv,
+		cfg:        p2pconf,
+		ctx:        ctx,
+		host:       host,
+		close:      make(chan struct{}),
+		peers:      0,
+		online:     false,
+		logger:     logger,
+		autonat:    autonat,
+		pubs:       new(pubsub.PubSub),
+		subs:       new(pubsub.Subscription),
+		dht:        dht,
+		limiter:    rate.NewLimiter(rate.Limit(p2pconf.RateLimit.GlobalAvg), p2pconf.RateLimit.GlobalBurst),
+	}
+	p2p.networkNotifee = &networkNotifee{p2p}
+	p2p.discoveryNotifee = &discoveryNotifee{p2p}
 
-	node.dht, err = dht.New(ctx, node.host)
-	if err != nil {
-		return nil, err
+	if p2pconf.Gossip {
+		p2p.psfn = pubsub.NewFloodSub
+	} else {
+		p2p.psfn = pubsub.NewGossipSub
 	}
 
-	node.routedhost = rhost.Wrap(node.host, node.dht)
+	// attach the stream handler
+	host.SetStreamHandler(ZProtocolID, p2p.handleStream)
 
-	node.bootstrapPeerDiscovery()
-	node.bootstrapDHT()
-	node.boostrapMDNS()
+	// implemenet and attach network notifee interface to receive
+	// notifications from a network.
+	host.Network().Notify(p2p.networkNotifee)
 
-	return node, nil
+	// mdns discovery service, if enabled, attach the discovery notifee interface
+	// to receive notifications from mdns service
+	logger.Info("mDNS discovery service", log.Bool("active", p2pconf.MDNS.Enable))
+	if p2pconf.MDNS.Enable {
+		discovery, err := mdns.NewMdnsService(ctx, host, p2pconf.MDNS.RescanInterval, ZMDNSServiceName)
+		if err != nil {
+			return nil, err
+		}
+		discovery.RegisterNotifee(p2p.discoveryNotifee)
+		p2p.discovery = discovery
+	}
+
+	return p2p, nil
 }

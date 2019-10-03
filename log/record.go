@@ -27,8 +27,10 @@ func (r *Record) String() string {
 	c.Write(" ")
 	for _, field := range r.Fields {
 		c.Write(c.LightGrey("["))
-		c.Write(c.LightGrey(field.Key))
-		c.Write(c.LightGrey(": "))
+		if len(field.Key) > 0 {
+			c.Write(c.LightGrey(field.Key))
+			c.Write(c.LightGrey(": "))
+		}
 		switch s := field.Value(); {
 		case len(s) > 20:
 			c.Write(c.LightGrey(s + ".."))

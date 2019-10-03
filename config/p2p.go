@@ -2,115 +2,165 @@ package config
 
 import (
 	"crypto/rand"
-	"encoding/hex"
-	"fmt"
+	"io/ioutil"
+	"os"
+	"time"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/zigmahq/zigma/config/types"
 )
 
-// P2PMultiAddr type
-type P2PMultiAddr string
+// RelayType for p2p connections
+type RelayType string
 
-// Multiaddr parses and returns multi address from addr string
-func (a P2PMultiAddr) Multiaddr() (multiaddr.Multiaddr, error) {
-	return multiaddr.NewMultiaddr(string(a))
-}
-
-// MustMultiaddr parses and returns multi address from string, panic if failure
-func (a P2PMultiAddr) MustMultiaddr() multiaddr.Multiaddr {
-	m, err := a.Multiaddr()
-	if err != nil {
-		panic(err)
-	}
-	return m
-}
+// Define relay settings
+const (
+	RelayActive  RelayType = "active"
+	RelayNat               = "nat"
+	RelayDisable           = "disable"
+)
 
 // P2P encapsulates configuration options for zigma peer-to-peer communication
 type P2P struct {
-	// The node identifier
-	PeerID string `yaml:"peer_id"`
-
-	// The public and private key or the node
-	PubKey string `yaml:"pub_key"`
-	PriKey string `yaml:"pri_key"`
-
-	// Allowed transports for the node
-	Transports []string `yaml:"transports"`
-
-	// Port for p2p listener
-	Port int `yaml:"listen_port"`
-
-	// List of multi addresses to listen on
-	ListenAddrs []string `yaml:"listen_addrs"`
-
-	// List of seed addresses for bootstrapping
-	BootstrapAddrs []P2PMultiAddr `yaml:"bootstrap_addrs"`
+	Name            string        `yaml:"name"`              // the custom node identifier
+	PrivKey         string        `yaml:"priv_key"`          // the path of the node private key
+	Gossip          bool          `yaml:"gossip"`            // enable or disable gossip
+	Relay           RelayType     `yaml:"relay"`             // enable or disable relay
+	MinNumConns     int           `yaml:"min_num_conns"`     // the min number of connections allowed
+	MaxNumConns     int           `yaml:"max_num_conns"`     // the max number of connections allowed
+	ConnGracePeriod time.Duration `yaml:"conn_grace_period"` // the connect timeout settings
+	Address         types.Addrs   `yaml:"laddr"`             // address to listen for incoming connections
+	Seeds           types.Addrs   `yaml:"seeds"`             // list of seed nodes to connect to
+	PersistentPeers types.Addrs   `yaml:"persistent_peers"`  // list of nodes to keep persistent connections
+	QUIC            bool          `yaml:"quic"`              // experimental quic support
+	MDNS            *MDNS         `yaml:"mdns"`
+	RateLimit       *RateLimit    `yaml:"rate_limt"`
 }
 
-func maddr(s string) multiaddr.Multiaddr {
-	ma, err := multiaddr.NewMultiaddr(s)
-	if err != nil {
-		panic(err)
-	}
-	return ma
+// MDNS encapsulates configuration options for mdns
+type MDNS struct {
+	Enable         bool          `yaml:"enable"`
+	RescanInterval time.Duration `yaml:"rescan_interval"`
+}
+
+// RateLimit encapsulates configuration options for ratelimiting
+type RateLimit struct {
+	Enable      bool `yaml:"enable"`
+	GlobalAvg   int  `yaml:"global_avg"`
+	GlobalBurst int  `yaml:"global_burst"`
+	PeerAvg     int  `yaml:"peer_avg"`
+	PeerBurst   int  `yaml:"peer_burst"`
 }
 
 // DefaultP2P generates the default configuration for p2p server
 func DefaultP2P() *P2P {
-	pri, pub, _ := crypto.GenerateEd25519Key(rand.Reader)
-	pid, _ := peer.IDFromPublicKey(pub)
-	bpri, _ := pri.Bytes()
-	bpub, _ := pub.Bytes()
-
 	p2p := &P2P{
-		PeerID:      pid.String(),
-		PubKey:      hex.EncodeToString(bpub),
-		PriKey:      hex.EncodeToString(bpri),
-		Transports:  []string{"tcp", "ws"},
-		ListenAddrs: []string{"/ip4/0.0.0.0"},
+		Address:         []*types.Addr{types.NewAddr("tcp://0:0")},
+		ConnGracePeriod: 0,
+		Gossip:          true,
+		Relay:           RelayActive,
+		RateLimit:       DefaultRateLimit(),
+		QUIC:            true,
+		MDNS:            DefaultMDNS(),
 	}
+	p2p.GenerateEd25519Key()
 	return p2p
 }
 
-// DecodePeerID takes a string and decode it to a peer.ID
-func (p *P2P) DecodePeerID() (peer.ID, error) {
-	return peer.IDB58Decode(p.PeerID)
+// DefaultMDNS generates the default configuration for mdns discovery
+func DefaultMDNS() *MDNS {
+	return &MDNS{
+		Enable:         true,
+		RescanInterval: time.Second * 10,
+	}
 }
 
-// DecodePrivateKey generates a private key through a hex string
+// DefaultRateLimit generates the default configuration for p2p rate limiting
+func DefaultRateLimit() *RateLimit {
+	return &RateLimit{
+		Enable:      false,
+		GlobalAvg:   300,
+		GlobalBurst: 500,
+		PeerAvg:     300,
+		PeerBurst:   500,
+	}
+}
+
+// GenerateEd25519Key to generate public and private keys for node
+func (p *P2P) GenerateEd25519Key() (crypto.PrivKey, error) {
+	if k, err := p.DecodePrivateKey(); k != nil && err == nil {
+		return k, err
+	}
+	f, err := ioutil.TempFile(os.TempDir(), "ed25519")
+	if err != nil {
+		return nil, err
+	}
+	priv, _, err := crypto.GenerateEd25519Key(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	b, err := priv.Bytes()
+	if err != nil {
+		return nil, err
+	}
+	if err := ioutil.WriteFile(f.Name(), b, 0644); err != nil {
+		return nil, err
+	}
+	p.PrivKey = f.Name()
+	return priv, nil
+}
+
+// DecodePrivateKey decodes the private key from private key path
 func (p *P2P) DecodePrivateKey() (crypto.PrivKey, error) {
-	b, err := hex.DecodeString(p.PriKey)
+	b, err := ioutil.ReadFile(p.PrivKey)
 	if err != nil {
 		return nil, err
 	}
 	return crypto.UnmarshalPrivateKey(b)
 }
 
-// DecodePublicKey generates a public key through a hex string
+// DecodePublicKey decodes and returns the public key from private key
 func (p *P2P) DecodePublicKey() (crypto.PubKey, error) {
-	b, err := hex.DecodeString(p.PubKey)
+	k, err := p.DecodePrivateKey()
 	if err != nil {
 		return nil, err
 	}
-	return crypto.UnmarshalPublicKey(b)
+	return k.GetPublic(), nil
 }
 
-// Addrs returns the addresses with listening port
-func (p *P2P) Addrs() []string {
-	var addrs []string
-	var transports = map[string]struct{}{}
-	for _, tran := range p.Transports {
-		transports[tran] = struct{}{}
+// DecodePeerID takes a public key and decode it to a peer.ID
+func (p *P2P) DecodePeerID() (peer.ID, error) {
+	k, err := p.DecodePublicKey()
+	if err != nil {
+		return "", err
 	}
-	for _, addr := range p.ListenAddrs {
-		if _, ok := transports["tcp"]; ok {
-			addrs = append(addrs, fmt.Sprintf("%s/tcp/%d", addr, p.Port))
+	return peer.IDFromPublicKey(k)
+}
+
+// DecodeListenAddrs decodes multiaddr addresses from listening addresses
+func (p *P2P) DecodeListenAddrs() ([]multiaddr.Multiaddr, error) {
+	var addrs = make([]multiaddr.Multiaddr, len(p.Address))
+	for i, addr := range p.Address {
+		m, err := addr.Multiaddr()
+		if err != nil {
+			return nil, err
 		}
-		if _, ok := transports["ws"]; ok {
-			addrs = append(addrs, fmt.Sprintf("%s/tcp/%d/ws", addr, p.Port))
-		}
+		addrs[i] = m
 	}
-	return addrs
+	return addrs, nil
+}
+
+// DecodeListenAddrStrings decodes mulitaddr addresses from listen address urls
+func (p *P2P) DecodeListenAddrStrings() ([]string, error) {
+	var addrs = make([]string, len(p.Address))
+	for i, addr := range p.Address {
+		m, err := addr.Multiaddr()
+		if err != nil {
+			return nil, err
+		}
+		addrs[i] = m.String()
+	}
+	return addrs, nil
 }
