@@ -11,11 +11,13 @@ import (
 	"github.com/zigmahq/zigma/p2p"
 )
 
+var logger = log.DefaultLogger
+
 // Node encapsulates a znode server
 type Node struct {
 	*p2p.P2P
-	logger log.Logger
-	stop   chan os.Signal
+	ctx  context.Context
+	stop chan os.Signal
 }
 
 // Start starts the node and p2p services
@@ -25,7 +27,7 @@ func (n *Node) Start() error {
 	}
 	signal.Notify(n.stop, syscall.SIGINT)
 	<-n.stop
-	n.logger.NL()
+	logger.NL()
 	return nil
 }
 
@@ -35,16 +37,17 @@ func (n *Node) Stop() error {
 }
 
 // NewNode initializes and returns a zigma node
-func NewNode(ctx context.Context, logger log.Logger, conf *config.Config) (*Node, error) {
-	p, err := p2p.NewServer(ctx, logger, conf.P2P)
+func NewNode(ctx context.Context, conf *config.Config) (*Node, error) {
+	n := &Node{
+		ctx:  ctx,
+		stop: make(chan os.Signal, 1),
+	}
+
+	p, err := p2p.NewServer(ctx, conf.P2P, n)
 	if err != nil {
 		return nil, err
 	}
+	n.P2P = p
 
-	n := &Node{
-		P2P:    p,
-		logger: logger,
-		stop:   make(chan os.Signal, 1),
-	}
 	return n, nil
 }

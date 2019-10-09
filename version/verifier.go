@@ -28,10 +28,7 @@ func (v verifier) String() string {
 
 // Sign signs the version with a release private key
 func (v Version) Sign(pri ed25519.PrivateKey) ([]byte, error) {
-	b, err := v.Marshal()
-	if err != nil {
-		return nil, err
-	}
+	b := []byte(v.Number)
 	sig := ed25519.Sign(pri, b)
 	v.Signature = sig
 
@@ -40,19 +37,16 @@ func (v Version) Sign(pri ed25519.PrivateKey) ([]byte, error) {
 
 // Verify reports whether the version is signed
 func (v Version) Verify(pub ...ed25519.PublicKey) bool {
-	ver := Version{
-		Number: v.Number,
-		Name:   v.Name,
-	}
-
-	b, err := ver.Marshal()
-	if err != nil {
-		return false
-	}
-
+	b := []byte(v.Number)
 	vf := Verifier
 	if len(pub) > 0 {
 		vf = vf.WithPub(pub[0])
 	}
 	return vf.Verify(b, v.Signature)
+}
+
+// IsValid reports whether the version is signed and valid
+func (v Version) IsValid() bool {
+	b := []byte(v.Number)
+	return Verifier.Verify(b, v.Signature)
 }

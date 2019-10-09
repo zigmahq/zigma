@@ -1,23 +1,42 @@
 package p2p
 
 import (
-	"bufio"
+	"io"
 
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/zigmahq/zigma/log"
 )
 
-func (n *P2P) handleStream(stream network.Stream) {
-	// drop connection due to high traffic volume
-	if n.cfg.RateLimit.Enable && !n.limiter.Allow() {
-		stream.Conn().Close()
-		return
-	}
+// stream errors
+const (
+	ErrStreamClosed = "stream closed"
+	ErrStreamReset  = "stream reset"
+	ErrUnknownCodec = "multicodec did not match"
+)
 
-	rw := bufio.NewReadWriter(bufio.NewReader(stream), bufio.NewWriter(stream))
-	s, err := rw.ReadString('\n')
-	if err != nil || len(s) == 0 {
-		return
+func (n *P2P) streamHandlerWrapper(stream network.Stream) {
+	n.streamHandler(WrapStream(stream), nil)
+}
+
+func (n *P2P) streamHandler(ws *WrappedStream, replies chan Message) {
+	for {
+		m, err := ws.receive()
+		if err != nil {
+			switch err.Error() {
+			case io.EOF.Error(), ErrStreamClosed, ErrStreamReset, ErrUnknownCodec:
+			default:
+				logger.Error("stream error: " + err.Error())
+			}
+			break
+		}
+
+		if replies != nil {
+			go func() { replies <- m }()
+		}
+
+		if n.itf != nil {
+			if err := n.itf.MessageReceived(ws, m); err != nil {
+				logger.Error("handler error: " + err.Error())
+			}
+		}
 	}
-	n.logger.Info("received", log.String("msg", s))
 }

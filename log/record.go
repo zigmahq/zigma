@@ -33,7 +33,7 @@ func (r *Record) String() string {
 		}
 		switch s := field.Value(); {
 		case len(s) > 20:
-			c.Write(c.LightGrey(s + ".."))
+			c.Write(c.LightGrey(s[:20] + ".."))
 		default:
 			c.Write(c.LightGrey(s))
 		}

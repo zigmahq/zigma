@@ -23,7 +23,7 @@ func main() {
 	)
 	cfg := config.DefaultConfig()
 
-	node, err := node.NewNode(ctx, logger, cfg)
+	node, err := node.NewNode(ctx, cfg)
 	if err != nil {
 		panic(err)
 	}

@@ -53,7 +53,7 @@ var sign = &cobra.Command{
 		vff := path.Join(dir, "version.go")
 
 		ver := &version.Version{
-			Number: "0.0.0",
+			Number: "0.0.1",
 			Name:   "autumn-waterfall",
 		}
 

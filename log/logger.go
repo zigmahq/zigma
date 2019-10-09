@@ -7,6 +7,9 @@ import (
 	"github.com/go-stack/stack"
 )
 
+// DefaultLogger initializes default logger
+var DefaultLogger = NewLogger()
+
 // Logger implements a simple logging interface
 type Logger interface {
 	ID() string

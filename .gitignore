@@ -1,2 +1,3 @@
 version/version.go
 version/version.pb.go
+p2p/message.pb.go

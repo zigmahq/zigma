@@ -1,0 +1,19 @@
+syntax = "proto3";
+package p2p;
+
+message Message {
+    string id = 1;
+    uint32 type = 2;
+
+    map<string, string> headers = 3;
+    bytes body = 4;
+
+    string originator = 11; // peer that originated this message
+    string destination = 12; // peer that will receive this message
+
+    int64 created_sec = 20;
+    int64 created_nsec = 21;
+
+    int64 deadline_sec = 22;
+    int64 deadline_nsec = 23;
+}

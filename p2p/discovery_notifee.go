@@ -17,6 +17,8 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 		return
 	}
 
+	pid := pi.ID.Pretty()
+
 	// do not establish connection to peer if it has been connected or
 	// connection failure was occurred
 	switch n.p2p.host.Network().Connectedness(pi.ID) {
@@ -31,12 +33,11 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 		return
 	}
 
-	// there is no existing connection between local and remote peer node,
-	// so establish a connection with remote node
-	if err := n.p2p.host.Connect(n.p2p.ctx, pi); err != nil {
-		n.p2p.logger.Error(
-			"connection failure",
-			log.String("peer-id", pi.ID.Pretty()),
-			log.String("reason", err.Error()))
+	if n.p2p.itf == nil {
+		return
+	}
+
+	if err := n.p2p.itf.PeerFound(pi); err != nil {
+		logger.Error("PeerFound error: "+err.Error(), log.String("peer-id", pid))
 	}
 }

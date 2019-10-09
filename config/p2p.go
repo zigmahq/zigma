@@ -2,14 +2,17 @@ package config
 
 import (
 	"crypto/rand"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/zigmahq/zigma/config/types"
+	"github.com/zigmahq/zigma/version"
 )
 
 // RelayType for p2p connections
@@ -26,7 +29,7 @@ const (
 type P2P struct {
 	Name            string        `yaml:"name"`              // the custom node identifier
 	PrivKey         string        `yaml:"priv_key"`          // the path of the node private key
-	Gossip          bool          `yaml:"gossip"`            // enable or disable gossip
+	Queue           string        `yaml:"-"`                 // the pubsub queue name
 	Relay           RelayType     `yaml:"relay"`             // enable or disable relay
 	MinNumConns     int           `yaml:"min_num_conns"`     // the min number of connections allowed
 	MaxNumConns     int           `yaml:"max_num_conns"`     // the max number of connections allowed
@@ -35,14 +38,33 @@ type P2P struct {
 	Seeds           types.Addrs   `yaml:"seeds"`             // list of seed nodes to connect to
 	PersistentPeers types.Addrs   `yaml:"persistent_peers"`  // list of nodes to keep persistent connections
 	QUIC            bool          `yaml:"quic"`              // experimental quic support
-	MDNS            *MDNS         `yaml:"mdns"`
-	RateLimit       *RateLimit    `yaml:"rate_limt"`
+	Insecure        bool          `yaml:"insecure"`          // allow insecure connection
+	MDNS            *MDNS         `yaml:"mdns"`              // settings for mdns discovery
+	DHT             *DHT          `yaml:"dht"`               // settings for dht kademlia discovery
+	Protocol        *Protocol     `yaml:"protocol"`          // protocol options
+	RateLimit       *RateLimit    `yaml:"rate_limt"`         // ratelimiting for p2p
+}
+
+// Protocol encapsulates configuration options for p2p protocol
+type Protocol struct {
+	ID        string `yaml:"-"`
+	Name      string `yaml:"-"`
+	Version   string `yaml:"-"`
+	Signature []byte `yaml:"-"`
 }
 
 // MDNS encapsulates configuration options for mdns
 type MDNS struct {
 	Enable         bool          `yaml:"enable"`
+	ServiceName    string        `yaml:"service_name"`
 	RescanInterval time.Duration `yaml:"rescan_interval"`
+}
+
+// DHT encapsulates configuration options for dht kademlia
+type DHT struct {
+	Enable     bool          `yaml:"enable"`
+	Rendezvous string        `yaml:"rendezvous"`
+	TTL        time.Duration `yaml:"ttl"`
 }
 
 // RateLimit encapsulates configuration options for ratelimiting
@@ -58,22 +80,45 @@ type RateLimit struct {
 func DefaultP2P() *P2P {
 	p2p := &P2P{
 		Address:         []*types.Addr{types.NewAddr("tcp://0:0")},
+		Queue:           "zigma",
 		ConnGracePeriod: 0,
-		Gossip:          true,
 		Relay:           RelayActive,
 		RateLimit:       DefaultRateLimit(),
 		QUIC:            true,
+		Insecure:        false,
 		MDNS:            DefaultMDNS(),
+		DHT:             DefaultDHT(),
+		Protocol:        DefaultProtocol(),
 	}
 	p2p.GenerateEd25519Key()
 	return p2p
+}
+
+// DefaultProtocol generates the default configuration for p2p protocol
+func DefaultProtocol() *Protocol {
+	return &Protocol{
+		ID:        "zigma",
+		Name:      version.Current.Name,
+		Version:   version.Current.Number,
+		Signature: version.Current.Signature,
+	}
 }
 
 // DefaultMDNS generates the default configuration for mdns discovery
 func DefaultMDNS() *MDNS {
 	return &MDNS{
 		Enable:         true,
-		RescanInterval: time.Second * 10,
+		ServiceName:    "_zigma-discovery._udp",
+		RescanInterval: time.Second * 30,
+	}
+}
+
+// DefaultDHT generates the default configuration for dht discovery
+func DefaultDHT() *DHT {
+	return &DHT{
+		Enable:     true,
+		Rendezvous: "/zigma/dht",
+		TTL:        time.Second * 10,
 	}
 }
 
@@ -139,8 +184,8 @@ func (p *P2P) DecodePeerID() (peer.ID, error) {
 	return peer.IDFromPublicKey(k)
 }
 
-// DecodeListenAddrs decodes multiaddr addresses from listening addresses
-func (p *P2P) DecodeListenAddrs() ([]multiaddr.Multiaddr, error) {
+// ListenAddrs decodes multiaddr addresses from listening addresses
+func (p *P2P) ListenAddrs() ([]multiaddr.Multiaddr, error) {
 	var addrs = make([]multiaddr.Multiaddr, len(p.Address))
 	for i, addr := range p.Address {
 		m, err := addr.Multiaddr()
@@ -152,8 +197,8 @@ func (p *P2P) DecodeListenAddrs() ([]multiaddr.Multiaddr, error) {
 	return addrs, nil
 }
 
-// DecodeListenAddrStrings decodes mulitaddr addresses from listen address urls
-func (p *P2P) DecodeListenAddrStrings() ([]string, error) {
+// ListenAddrStrings decodes mulitaddr addresses from listen address urls
+func (p *P2P) ListenAddrStrings() ([]string, error) {
 	var addrs = make([]string, len(p.Address))
 	for i, addr := range p.Address {
 		m, err := addr.Multiaddr()
@@ -163,4 +208,12 @@ func (p *P2P) DecodeListenAddrStrings() ([]string, error) {
 		addrs[i] = m.String()
 	}
 	return addrs, nil
+}
+
+// ProtocolID generates p2p protocol-id with the name and version information
+func (p *P2P) ProtocolID() protocol.ID {
+	cfg := p.Protocol
+	// tmp := fmt.Sprintf("/%s/%s", cfg.ID, cfg.Version)
+	tmp := fmt.Sprintf("/%s", cfg.ID)
+	return protocol.ID(tmp)
 }
