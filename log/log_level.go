@@ -71,8 +71,11 @@ func SetLevel(l Level) {
 }
 
 func init() {
-	l, ok := os.LookupEnv("LOG_LEVEL")
-	if ok {
+	l, ok := os.LookupEnv("LOG")
+	switch {
+	case l == "*":
+		lvl = LogTrace
+	case ok:
 		lvl = LevelFromString(l)
 	}
 }
