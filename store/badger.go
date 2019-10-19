@@ -25,7 +25,24 @@ import (
 
 // BadgerStore implements dgraph-io/badger storage
 type BadgerStore struct {
-	db *badger.DB
+	db   *badger.DB
+	quit chan struct{}
+}
+
+// Init initializes the garbage collection task
+func (b *BadgerStore) Init() {
+	ticker := time.NewTicker(5 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				b.db.RunValueLogGC(0.7)
+			case <-b.quit:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
 }
 
 // Set sets value to a badger key/value storage, passing in negative or 0 as
@@ -80,6 +97,7 @@ func (b *BadgerStore) Iterate(key []byte) Iterator {
 
 // Close closes a database
 func (b *BadgerStore) Close() {
+	close(b.quit)
 	b.db.Close()
 }
 
@@ -91,6 +109,9 @@ func NewBadgerStore(path string) (Store, error) {
 		return nil, err
 	}
 
-	store := &BadgerStore{db}
+	quit := make(chan struct{}, 1)
+
+	store := &BadgerStore{db, quit}
+	store.Init()
 	return store, nil
 }

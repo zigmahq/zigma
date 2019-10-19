@@ -21,6 +21,7 @@ import "time"
 
 // Store is the interface for implementing the basic storage mechanism
 type Store interface {
+	Init()
 	Set(key, val []byte, ttl time.Duration)
 	Get(key []byte) (data []byte, found bool)
 	Delete(key []byte)
