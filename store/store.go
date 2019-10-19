@@ -31,6 +31,7 @@ type Store interface {
 
 // Iterator is the interface for implementing iterator for key-value storage
 type Iterator interface {
+	Reset()
 	Seek(key []byte)
 	Next() bool
 	Item() Item

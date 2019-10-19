@@ -34,8 +34,15 @@ type BadgerIteratorItem struct {
 	item *badger.Item
 }
 
+// Reset would rewind the iterator cursor all the way to zero-th position
+func (b *BadgerIterator) Reset() {
+	b.curr = -1
+	b.iter.Rewind()
+}
+
 // Seek would seek to the provided key if present
 func (b *BadgerIterator) Seek(key []byte) {
+	b.curr = -1
 	b.iter.Seek(key)
 }
 

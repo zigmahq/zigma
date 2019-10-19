@@ -89,10 +89,10 @@ func (b *BadgerStore) Iterate(key []byte) Iterator {
 	opts.Prefix = key
 
 	iter := txn.NewIterator(opts)
-	iter.Rewind()
 
-	curr := -1
-	return &BadgerIterator{iter, curr}
+	bi := &BadgerIterator{iter: iter}
+	bi.Reset()
+	return bi
 }
 
 // Close closes a database
