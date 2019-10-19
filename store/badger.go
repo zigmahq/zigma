@@ -45,6 +45,12 @@ func (b *BadgerStore) Init() {
 	}()
 }
 
+// Size returns the current size of database in bytes
+func (b *BadgerStore) Size() int64 {
+	lsm, vlog := b.db.Size()
+	return lsm + vlog
+}
+
 // Set sets value to a badger key/value storage, passing in negative or 0 as
 // expiration number would not set an expiration time to key
 func (b *BadgerStore) Set(key, val []byte, expiration time.Duration) {
@@ -91,7 +97,7 @@ func (b *BadgerStore) Iterate(key []byte) Iterator {
 	iter := txn.NewIterator(opts)
 
 	bi := &BadgerIterator{iter: iter}
-	bi.Reset()
+	bi.Seek(nil)
 	return bi
 }
 
@@ -104,11 +110,12 @@ func (b *BadgerStore) Close() {
 // NewBadgerStore opens a badger database from the provided path
 func NewBadgerStore(path string) (Store, error) {
 	opt := badger.DefaultOptions(path)
+	opt.Logger = &BadgerLogger{}
+
 	db, err := badger.Open(opt)
 	if err != nil {
 		return nil, err
 	}
-
 	quit := make(chan struct{}, 1)
 
 	store := &BadgerStore{db, quit}

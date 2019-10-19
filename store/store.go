@@ -22,6 +22,7 @@ import "time"
 // Store is the interface for implementing the basic storage mechanism
 type Store interface {
 	Init()
+	Size() int64
 	Set(key, val []byte, ttl time.Duration)
 	Get(key []byte) (data []byte, found bool)
 	Delete(key []byte)
@@ -31,7 +32,6 @@ type Store interface {
 
 // Iterator is the interface for implementing iterator for key-value storage
 type Iterator interface {
-	Reset()
 	Seek(key []byte)
 	Next() bool
 	Item() Item
