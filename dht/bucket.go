@@ -19,7 +19,7 @@ package dht
 import "strings"
 
 // Bucket implements the hashtable bucket
-type Bucket [K]*Node
+type Bucket [k]*Node
 
 // AddNode adds a node to bucket
 // Nodes within buckets are sorted by least recently seen e.g.
@@ -34,10 +34,10 @@ func (b *Bucket) AddNode(node *Node) {
 		b.markSeen(idx)
 		return
 	}
-	for i := 0; i < K-1; i++ {
+	for i := 0; i < k-1; i++ {
 		b[i] = b[i+1]
 	}
-	b[K-1] = node
+	b[k-1] = node
 }
 
 // RemoveNode removes a node from the bucket
@@ -63,17 +63,17 @@ func (b *Bucket) RemoveNode(node *Node) {
 
 // RemoveAllNodes removes all nodes from bucket
 func (b *Bucket) RemoveAllNodes() {
-	for i := 0; i < K; i++ {
+	for i := 0; i < k; i++ {
 		b[i] = nil
 	}
 }
 
 // Iterator iterate over active nodes in the bucket
 func (b *Bucket) Iterator() <-chan *Node {
-	ch := make(chan *Node, K)
+	ch := make(chan *Node, k)
 	go func() {
 		defer close(ch)
-		for i := K - 1; i >= 0; i-- {
+		for i := k - 1; i >= 0; i-- {
 			if b[i] == nil {
 				return
 			}
@@ -86,7 +86,7 @@ func (b *Bucket) Iterator() <-chan *Node {
 // Len calculates the node size of the bucket
 func (b *Bucket) Len() int {
 	var total int
-	for i := K - 1; i >= 0; i-- {
+	for i := k - 1; i >= 0; i-- {
 		if b[i] == nil {
 			break
 		}
@@ -104,7 +104,7 @@ func (b *Bucket) String() string {
 			sb.WriteByte(0x2c)
 			sb.WriteByte(0x20)
 		}
-		sb.Write(node.HexString()[:B/8/4])
+		sb.Write(node.HexString()[:8])
 		i++
 	}
 	sb.WriteByte(0x5d)
@@ -113,14 +113,14 @@ func (b *Bucket) String() string {
 
 func (b *Bucket) markSeen(idx int) {
 	t := b[idx]
-	for i := idx; i < K-1; i++ {
+	for i := idx; i < k-1; i++ {
 		b[i] = b[i+1]
 	}
-	b[K-1] = t
+	b[k-1] = t
 }
 
 func (b *Bucket) indexOf(node *Node) int {
-	for i := K - 1; i >= 0; i-- {
+	for i := k - 1; i >= 0; i-- {
 		if b[i] == nil {
 			break
 		}

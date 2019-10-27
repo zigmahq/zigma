@@ -16,21 +16,67 @@
 
 package dht
 
-import "time"
+import (
+	"time"
+
+	"github.com/zigmahq/zigma/store"
+)
 
 const (
+	// the number representing the degree of parallelism in network calls
+	alpha = 3
+
+	// the size in bits of the keys used to identify nodes and store and retrieve data;
+	// this is normally 160 bit with the use of sha1 hash type, but we are using ed25519
+	// public key and sha-256 hash so we're passing in 256 here
+	b = 256
+
+	// the maximum number of contacts stored in a bucket; this is normally 20
+	k = 20
+
 	// the time after which a key/value pair expires; this is a time-to-live (TTL)
 	// from the original publication date; this is normally 86400s
 	tExpire = time.Hour * 24
+
 	// the time after which an otherwise unaccessed bucket must be refreshed
 	tRefresh = time.Hour
+
 	// the interval between kademlia replication events, when a node is required to
 	// publish its entire database
 	tReplicate = time.Hour
+
 	// the time after which the original publisher must republish a key/value pair
 	tRepublish = time.Hour * 24
 )
 
-// DHT represents the state of the local node in the distributed hash table
-type DHT struct {
+// Kademlia represents the state of the local node in the distributed hash table
+type Kademlia struct {
+	table *RoutingTable
+	store store.Store
+}
+
+// Store stores data on the network. A sha-256 encoded identifier will be returned
+// if the store operation is successful
+func (kad *Kademlia) Store(data []byte) ([]byte, error) {
+	return nil, nil
+}
+
+// FindValue retrieves data from the network with a key
+func (kad *Kademlia) FindValue(key []byte) ([]byte, error) {
+	return nil, nil
+}
+
+// FindNode returns a node from the networking using key
+func (kad *Kademlia) FindNode(key []byte) (*Node, error) {
+	return nil, nil
+}
+
+// NewKademlia initializes a DHT kademlia service
+func NewKademlia(self *Node, store store.Store) *Kademlia {
+	r := NewRoutingTable(self)
+	k := &Kademlia{
+		table: r,
+		store: store,
+	}
+	return k
 }

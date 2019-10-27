@@ -78,14 +78,6 @@ func (n *Node) XOR(comparator *Node) []byte {
 	return o
 }
 
-// DistanceBetween between two nodes
-func (n *Node) DistanceBetween(comparator *Node) *big.Int {
-	bf1 := new(big.Int).SetBytes(n.Id)
-	bf2 := new(big.Int).SetBytes(comparator.Id)
-	xor := new(big.Int).Xor(bf1, bf2)
-	return xor
-}
-
 // ZeroPrefixLen returns the number of consecutive zeroes in a byte slice
 func (n *Node) ZeroPrefixLen(comparator *Node) int {
 	distance := n.XOR(comparator)
@@ -96,5 +88,13 @@ func (n *Node) ZeroPrefixLen(comparator *Node) int {
 			}
 		}
 	}
-	return B - 1
+	return b - 1
+}
+
+// DistanceBetween between two nodes
+func (n *Node) DistanceBetween(comparator *Node) *big.Int {
+	bf1 := new(big.Int).SetBytes(n.Id)
+	bf2 := new(big.Int).SetBytes(comparator.Id)
+	xor := new(big.Int).Xor(bf1, bf2)
+	return xor
 }

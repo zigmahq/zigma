@@ -19,48 +19,37 @@ package dht
 
 import "sync"
 
-const (
-	// Alpha is the number representing the degree of parallelism in network calls
-	Alpha = 3
-	// B is the size in bits of the keys used to identify nodes and store and retrieve data;
-	// this is normally 160 bit with the use of sha1 hash type, but we are using ed25519
-	// public key and sha-256 hash so we're passing in 256 here
-	B = 256
-	// K is the maximum number of contacts stored in a bucket; this is normally 20
-	K = 20
-)
-
 // RoutingTable implements the routing table state
 type RoutingTable struct {
 	mutex   *sync.RWMutex
 	Self    *Node
-	Buckets [B]*Bucket
+	Buckets [b]*Bucket
 }
 
-func (h *RoutingTable) bucketFromNode(node *Node) *Bucket {
-	idx := h.Self.ZeroPrefixLen(node)
-	return h.Buckets[idx]
+func (r *RoutingTable) bucketFromNode(node *Node) *Bucket {
+	idx := r.Self.ZeroPrefixLen(node)
+	return r.Buckets[idx]
 }
 
-func (h *RoutingTable) kclosest(num int, contact *Node, ignoredNodes ...*Node) []*Node {
+func (r *RoutingTable) kclosest(num int, contact *Node, ignoredNodes ...*Node) []*Node {
 	var (
-		l = NewContacts(h.Self, ignoredNodes...)
-		d = h.Self.ZeroPrefixLen(contact)
-		m = K
+		l = NewContacts(r.Self, ignoredNodes...)
+		d = r.Self.ZeroPrefixLen(contact)
+		n = k
 	)
 	if num > 0 {
-		m = num
+		n = num
 	}
-	for i := d; i >= 0 && l.Len() < m; i-- {
-		for node := range h.Buckets[i].Iterator() {
-			if l.Append(node) && l.Len() >= m {
+	for i := d; i >= 0 && l.Len() < n; i-- {
+		for node := range r.Buckets[i].Iterator() {
+			if l.Append(node) && l.Len() >= n {
 				break
 			}
 		}
 	}
-	for i := d + 1; i < B && l.Len() < m; i++ {
-		for node := range h.Buckets[i].Iterator() {
-			if l.Append(node) && l.Len() >= m {
+	for i := d + 1; i < b && l.Len() < n; i++ {
+		for node := range r.Buckets[i].Iterator() {
+			if l.Append(node) && l.Len() >= n {
 				break
 			}
 		}
@@ -69,53 +58,53 @@ func (h *RoutingTable) kclosest(num int, contact *Node, ignoredNodes ...*Node) [
 	return l.Nodes
 }
 
-func (h *RoutingTable) addNode(node *Node) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+func (r *RoutingTable) addNode(node *Node) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	if node == nil || len(node.Id) == 0 {
 		return
 	}
 
-	bucket := h.bucketFromNode(node)
+	bucket := r.bucketFromNode(node)
 	bucket.AddNode(node)
 }
 
-func (h *RoutingTable) removeNode(node *Node) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+func (r *RoutingTable) removeNode(node *Node) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	if node == nil || len(node.Id) == 0 {
 		return
 	}
 
-	bucket := h.bucketFromNode(node)
+	bucket := r.bucketFromNode(node)
 	bucket.RemoveNode(node)
 }
 
-func (h *RoutingTable) size() int {
-	h.mutex.RLock()
-	defer h.mutex.RUnlock()
+func (r *RoutingTable) size() int {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
 
 	var n int
-	for i := 0; i < len(h.Buckets); i++ {
-		n += h.Buckets[i].Len()
+	for i := 0; i < len(r.Buckets); i++ {
+		n += r.Buckets[i].Len()
 	}
 	return n
 }
 
 // NewRoutingTable initializes a new hashtable instance
 func NewRoutingTable(self *Node) *RoutingTable {
-	h := &RoutingTable{
+	r := &RoutingTable{
 		mutex:   new(sync.RWMutex),
 		Self:    self,
-		Buckets: [B]*Bucket{},
+		Buckets: [b]*Bucket{},
 	}
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
-	for i := 0; i < len(h.Buckets); i++ {
-		h.Buckets[i] = NewBucket()
+	for i := 0; i < len(r.Buckets); i++ {
+		r.Buckets[i] = NewBucket()
 	}
-	return h
+	return r
 }

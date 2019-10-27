@@ -24,14 +24,14 @@ import (
 // Contacts is used in order to sort a list of arbitrary nodes against a comparator
 type Contacts struct {
 	mutex      *sync.RWMutex
-	uniq       map[[B]byte]int
-	blacklist  map[[B]byte]struct{}
+	uniq       map[[b]byte]int
+	blacklist  map[[b]byte]struct{}
 	Nodes      []*Node
 	Comparator *Node
 }
 
-func (p *Contacts) nodeID(node *Node) [B]byte {
-	var id [B]byte
+func (p *Contacts) nodeID(node *Node) [b]byte {
+	var id [b]byte
 	for k, v := range node.Id {
 		id[k] = v
 	}
@@ -126,8 +126,8 @@ func (p *Contacts) Less(i, j int) bool {
 func NewContacts(comparator *Node, blacklist ...*Node) *Contacts {
 	pl := &Contacts{
 		mutex:      new(sync.RWMutex),
-		uniq:       make(map[[B]byte]int),
-		blacklist:  make(map[[B]byte]struct{}),
+		uniq:       make(map[[b]byte]int),
+		blacklist:  make(map[[b]byte]struct{}),
 		Nodes:      make([]*Node, 0),
 		Comparator: comparator,
 	}
