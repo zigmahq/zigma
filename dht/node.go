@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math/big"
+	"math/bits"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multihash"
@@ -115,10 +116,8 @@ func (n *Node) XOR(comparator *Node) []byte {
 func (n *Node) ZeroPrefixLen(comparator *Node) int {
 	distance := n.XOR(comparator)
 	for i, b := range distance {
-		for j := 0; j < 8; j++ {
-			if (b>>uint8(7-j))&0x1 != 0 {
-				return i*8 + j
-			}
+		if b != 0 {
+			return i*8 + bits.LeadingZeros8(uint8(b))
 		}
 	}
 	return len(distance)*8 - 1
