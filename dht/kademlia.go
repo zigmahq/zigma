@@ -25,7 +25,7 @@ import (
 
 const (
 	// the default hashing function
-	h = multihash.SHA3_256
+	h = multihash.SHA3_512
 
 	// the maximum number of contacts stored in a bucket; this is normally 20
 	k = 20

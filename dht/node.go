@@ -19,12 +19,24 @@ package dht
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"math/big"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multihash"
 )
+
+// MockNode initializes node in unit tests
+func MockNode(i int) *Node {
+	bs := make([]byte, 4)
+	binary.LittleEndian.PutUint32(bs, uint32(i))
+	h, err := multihash.Sum(bs, h, -1)
+	if err != nil {
+		return nil
+	}
+	return NodeFromHash(h)
+}
 
 // NodeFromHash initializes a dht node from multihash
 func NodeFromHash(mh multihash.Multihash) *Node {
@@ -68,7 +80,10 @@ func NodeFromPeerID(pid peer.ID) *Node {
 
 // IsValidNode checks if the node is valid
 func IsValidNode(node *Node) bool {
-	return node != nil && len(node.Id) > 0 && len(node.Hash) > 0
+	if node == nil {
+		return false
+	}
+	return len(node.Id) > 0 && len(node.Id) <= 66 && len(node.Hash) > 0 && len(node.Hash) <= 64
 }
 
 // HexString returns id in the hex format

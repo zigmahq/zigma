@@ -17,9 +17,7 @@
 
 package dht
 
-import (
-	"sync"
-)
+import "sync"
 
 // RoutingTable implements the routing table state
 type RoutingTable struct {
@@ -34,7 +32,8 @@ func (r *RoutingTable) bucketFromNode(node *Node) *Bucket {
 	return r.Buckets[idx]
 }
 
-func (r *RoutingTable) kclosest(num int, contact *Node, ignoredNodes ...*Node) []*Node {
+// Kclosest searches the routing table, and returns N number of closest node with contact id
+func (r *RoutingTable) Kclosest(num int, contact *Node, ignoredNodes ...*Node) []*Node {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
@@ -61,10 +60,11 @@ func (r *RoutingTable) kclosest(num int, contact *Node, ignoredNodes ...*Node) [
 		}
 	}
 	l.Sort()
-	return l.Nodes
+	return l.Nodes()
 }
 
-func (r *RoutingTable) addNode(node *Node) {
+// AddNode insert a node to routing table
+func (r *RoutingTable) AddNode(node *Node) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -78,7 +78,8 @@ func (r *RoutingTable) addNode(node *Node) {
 	bucket.AddNode(node)
 }
 
-func (r *RoutingTable) removeNode(node *Node) {
+// RemoveNode removes a node from routing table
+func (r *RoutingTable) RemoveNode(node *Node) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -101,7 +102,8 @@ func (r *RoutingTable) shouldUpdateBucketCap(node *Node) {
 	}
 }
 
-func (r *RoutingTable) size() int {
+// Size returns the total number of nodes in routing table
+func (r *RoutingTable) Size() int {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 

@@ -17,11 +17,10 @@
 package dht_test
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"testing"
 
+	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/assert"
 	"github.com/zigmahq/zigma/dht"
 )
@@ -31,7 +30,7 @@ var nodeset []*dht.Node
 
 func init() {
 	bucket = dht.NewBucket()
-	nodeset = make([]*dht.Node, 1000)
+	nodeset = make([]*dht.Node, 1000000)
 	for i := range nodeset {
 		nodeset[i] = newBucketNode(i)
 	}
@@ -40,10 +39,11 @@ func init() {
 func newBucketNode(i int) *dht.Node {
 	bs := make([]byte, 4)
 	binary.LittleEndian.PutUint32(bs, uint32(i))
-	h := sha256.New()
-	h.Write(bs)
-	o := []byte(hex.EncodeToString(h.Sum(nil)))
-	return &dht.Node{Id: o, Hash: o}
+	h, err := multihash.Sum(bs, multihash.SHA3_256, -1)
+	if err != nil {
+		return nil
+	}
+	return dht.NodeFromHash(h)
 }
 
 func BenchmarkNodesetInit(b *testing.B) {

@@ -19,101 +19,131 @@ package dht
 import (
 	"sort"
 	"sync"
-	"unsafe"
 )
+
+// currently, the key length cap is set to 64+2 bytes. most of the time this is more
+// than enough as the default hash function is set to sha3-256, which is in length
+// 32+2 bytes, but just a note that the key length might change in the future when
+// the hash type is changed, the length of the key is affected depends on the hash
+// type that we are using. capacity equation: (N bits / 8) + 2 bytes
+const cc = 66
 
 // Contacts is used in order to sort a list of arbitrary nodes against a comparator
 type Contacts struct {
 	mutex      *sync.RWMutex
-	uniq       map[string]int
-	blacklist  map[string]struct{}
-	Nodes      []*Node
+	uniq       map[[cc]byte]int
+	blacklist  map[[cc]byte]struct{}
+	nodes      []*Node
 	Comparator *Node
 }
 
-func (p *Contacts) nodeID(node *Node) string {
-	return *(*string)(unsafe.Pointer(&node.Id))
+// nodeID reads a {cc} bytes identifier key from node id
+// the key is composed with the first {cc} bytes from node id only
+func (c *Contacts) nodeID(node *Node) [cc]byte {
+	var out [cc]byte
+	l := len(node.Id)
+	if n := len(out); l > n {
+		l = n
+	}
+	for i := 0; i < l; i++ {
+		out[i] = node.Id[i]
+	}
+	return out
 }
 
 // Append adds node to node list
-func (p *Contacts) Append(node *Node) bool {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+func (c *Contacts) Append(node *Node) bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-	id := p.nodeID(node)
-	if _, ok := p.blacklist[id]; ok {
+	id := c.nodeID(node)
+	if _, ok := c.blacklist[id]; ok {
 		return false
 	}
-	if _, ok := p.uniq[id]; ok {
+	if _, ok := c.uniq[id]; ok {
 		return false
 	}
 
-	p.Nodes = append(p.Nodes, node)
-	p.uniq[id] = len(p.Nodes) - 1
+	idx := len(c.nodes)
+	c.nodes = append(c.nodes, node)
+	c.uniq[id] = idx
 	return true
 }
 
 // Remove removes a node from the node list
-func (p *Contacts) Remove(node *Node) bool {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+func (c *Contacts) Remove(node *Node) bool {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-	id := p.nodeID(node)
-	i, ok := p.uniq[id]
+	id := c.nodeID(node)
+	i, ok := c.uniq[id]
 	if !ok {
 		return false
 	}
 
-	p.Nodes = append(p.Nodes[:i], p.Nodes[i+1:]...)
-	delete(p.uniq, id)
-	for k, v := range p.uniq {
+	c.nodes = append(c.nodes[:i], c.nodes[i+1:]...)
+	delete(c.uniq, id)
+
+	for k, v := range c.uniq {
 		if v > i {
-			p.uniq[k]--
+			c.uniq[k]--
 		}
 	}
 	return true
 }
 
 // IndexOf returns the index of node in node list
-func (p *Contacts) IndexOf(node *Node) int {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
+func (c *Contacts) IndexOf(node *Node) int {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
-	id := p.nodeID(node)
-	if i, ok := p.uniq[id]; ok {
+	id := c.nodeID(node)
+	if i, ok := c.uniq[id]; ok {
 		return i
 	}
 	return -1
 }
 
 // Sort sorts nodes based on distance in node list
-func (p *Contacts) Sort() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+func (c *Contacts) Sort() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
-	if p.Len() > 1 {
-		sort.Sort(p)
+	if c.Len() > 1 {
+		sort.Sort(c)
 	}
 }
 
+// Nodes returns all nodes in contacts
+func (c *Contacts) Nodes() []*Node {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	tmp := make([]*Node, len(c.nodes))
+	for i := 0; i < len(c.nodes); i++ {
+		tmp[i] = c.nodes[i]
+	}
+	return tmp
+}
+
 // Len implements slice sorting interface
-func (p *Contacts) Len() int {
-	return len(p.Nodes)
+func (c *Contacts) Len() int {
+	return len(c.nodes)
 }
 
 // Swap implements slice sorting interface
-func (p *Contacts) Swap(i, j int) {
-	i1 := p.nodeID(p.Nodes[i])
-	i2 := p.nodeID(p.Nodes[j])
-	p.Nodes[i], p.Nodes[j] = p.Nodes[j], p.Nodes[i]
-	p.uniq[i1], p.uniq[i2] = p.uniq[i2], p.uniq[i1]
+func (c *Contacts) Swap(i, j int) {
+	i1 := c.nodeID(c.nodes[i])
+	i2 := c.nodeID(c.nodes[j])
+	c.nodes[i], c.nodes[j] = c.nodes[j], c.nodes[i]
+	c.uniq[i1], c.uniq[i2] = c.uniq[i2], c.uniq[i1]
 }
 
 // Less implements slice sorting interface
-func (p *Contacts) Less(i, j int) bool {
-	if p.Comparator != nil {
-		d1 := p.Nodes[i].DistanceBetween(p.Comparator)
-		d2 := p.Nodes[j].DistanceBetween(p.Comparator)
+func (c *Contacts) Less(i, j int) bool {
+	if c.Comparator != nil {
+		d1 := c.nodes[i].DistanceBetween(c.Comparator)
+		d2 := c.nodes[j].DistanceBetween(c.Comparator)
 		return d1.Cmp(d2) == -1
 	}
 	return false
@@ -121,16 +151,16 @@ func (p *Contacts) Less(i, j int) bool {
 
 // NewContacts initializes a Contacts
 func NewContacts(comparator *Node, blacklist ...*Node) *Contacts {
-	pl := &Contacts{
+	c := &Contacts{
 		mutex:      new(sync.RWMutex),
-		uniq:       make(map[string]int),
-		blacklist:  make(map[string]struct{}),
-		Nodes:      make([]*Node, 0),
+		uniq:       make(map[[cc]byte]int),
+		blacklist:  make(map[[cc]byte]struct{}),
+		nodes:      make([]*Node, 0),
 		Comparator: comparator,
 	}
 	for _, node := range blacklist {
-		id := pl.nodeID(node)
-		pl.blacklist[id] = struct{}{}
+		id := c.nodeID(node)
+		c.blacklist[id] = struct{}{}
 	}
-	return pl
+	return c
 }
