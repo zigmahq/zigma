@@ -19,23 +19,20 @@ package dht
 import (
 	"sort"
 	"sync"
+	"unsafe"
 )
 
 // Contacts is used in order to sort a list of arbitrary nodes against a comparator
 type Contacts struct {
 	mutex      *sync.RWMutex
-	uniq       map[[b]byte]int
-	blacklist  map[[b]byte]struct{}
+	uniq       map[string]int
+	blacklist  map[string]struct{}
 	Nodes      []*Node
 	Comparator *Node
 }
 
-func (p *Contacts) nodeID(node *Node) [b]byte {
-	var id [b]byte
-	for k, v := range node.Id {
-		id[k] = v
-	}
-	return id
+func (p *Contacts) nodeID(node *Node) string {
+	return *(*string)(unsafe.Pointer(&node.Id))
 }
 
 // Append adds node to node list
@@ -126,8 +123,8 @@ func (p *Contacts) Less(i, j int) bool {
 func NewContacts(comparator *Node, blacklist ...*Node) *Contacts {
 	pl := &Contacts{
 		mutex:      new(sync.RWMutex),
-		uniq:       make(map[[b]byte]int),
-		blacklist:  make(map[[b]byte]struct{}),
+		uniq:       make(map[string]int),
+		blacklist:  make(map[string]struct{}),
 		Nodes:      make([]*Node, 0),
 		Comparator: comparator,
 	}

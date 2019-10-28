@@ -15,3 +15,15 @@
 // along with the zigma library. If not, see <http://www.gnu.org/licenses/>.
 
 package dht
+
+// Network interface
+type Network interface {
+	Send(*Message)
+	Receive() <-chan *Message
+}
+
+// Data interface
+type Data interface {
+	Key() []byte
+	Payload() []byte
+}

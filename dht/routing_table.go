@@ -17,13 +17,16 @@
 
 package dht
 
-import "sync"
+import (
+	"sync"
+)
 
 // RoutingTable implements the routing table state
 type RoutingTable struct {
 	mutex   *sync.RWMutex
+	b       int
 	Self    *Node
-	Buckets [b]*Bucket
+	Buckets []*Bucket
 }
 
 func (r *RoutingTable) bucketFromNode(node *Node) *Bucket {
@@ -32,6 +35,9 @@ func (r *RoutingTable) bucketFromNode(node *Node) *Bucket {
 }
 
 func (r *RoutingTable) kclosest(num int, contact *Node, ignoredNodes ...*Node) []*Node {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
 	var (
 		l = NewContacts(r.Self, ignoredNodes...)
 		d = r.Self.ZeroPrefixLen(contact)
@@ -47,7 +53,7 @@ func (r *RoutingTable) kclosest(num int, contact *Node, ignoredNodes ...*Node) [
 			}
 		}
 	}
-	for i := d + 1; i < b && l.Len() < n; i++ {
+	for i := d + 1; i < r.b && l.Len() < n; i++ {
 		for node := range r.Buckets[i].Iterator() {
 			if l.Append(node) && l.Len() >= n {
 				break
@@ -62,9 +68,11 @@ func (r *RoutingTable) addNode(node *Node) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if node == nil || len(node.Id) == 0 {
+	if !IsValidNode(node) {
 		return
 	}
+
+	r.shouldUpdateBucketCap(node)
 
 	bucket := r.bucketFromNode(node)
 	bucket.AddNode(node)
@@ -74,12 +82,23 @@ func (r *RoutingTable) removeNode(node *Node) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if node == nil || len(node.Id) == 0 {
+	if !IsValidNode(node) {
 		return
 	}
 
 	bucket := r.bucketFromNode(node)
 	bucket.RemoveNode(node)
+}
+
+func (r *RoutingTable) shouldUpdateBucketCap(node *Node) {
+	if b := len(node.Hash) * 8; b > r.b {
+		t := make([]*Bucket, b-r.b)
+		for i := 0; i < len(t); i++ {
+			t[i] = NewBucket()
+		}
+		r.Buckets = append(r.Buckets, t...)
+		r.b = b
+	}
 }
 
 func (r *RoutingTable) size() int {
@@ -95,10 +114,12 @@ func (r *RoutingTable) size() int {
 
 // NewRoutingTable initializes a new hashtable instance
 func NewRoutingTable(self *Node) *RoutingTable {
+	b := len(self.Hash) * 8
 	r := &RoutingTable{
 		mutex:   new(sync.RWMutex),
+		b:       b,
 		Self:    self,
-		Buckets: [b]*Bucket{},
+		Buckets: make([]*Bucket, b),
 	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

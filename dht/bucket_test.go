@@ -43,7 +43,7 @@ func newBucketNode(i int) *dht.Node {
 	h := sha256.New()
 	h.Write(bs)
 	o := []byte(hex.EncodeToString(h.Sum(nil)))
-	return &dht.Node{Id: o}
+	return &dht.Node{Id: o, Hash: o}
 }
 
 func BenchmarkNodesetInit(b *testing.B) {

@@ -36,9 +36,10 @@ enum ConnectionType {
 
 message Node {
   bytes id = 1;
-  bytes peer = 2;
-  repeated bytes addrs = 3;
-  ConnectionType connection = 4;
+  bytes hash = 2;
+  bytes peer_id = 3;
+  repeated bytes addrs = 4;
+  ConnectionType connection = 5;
 }
 
 message Message {

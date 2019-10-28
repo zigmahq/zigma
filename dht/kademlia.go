@@ -19,20 +19,19 @@ package dht
 import (
 	"time"
 
+	"github.com/multiformats/go-multihash"
 	"github.com/zigmahq/zigma/store"
 )
 
 const (
-	// the number representing the degree of parallelism in network calls
-	alpha = 3
-
-	// the size in bits of the keys used to identify nodes and store and retrieve data;
-	// this is normally 160 bit with the use of sha1 hash type, but we are using ed25519
-	// public key and sha-256 hash so we're passing in 256 here
-	b = 256
+	// the default hashing function
+	h = multihash.SHA3_256
 
 	// the maximum number of contacts stored in a bucket; this is normally 20
 	k = 20
+
+	// the number representing the degree of parallelism in network calls
+	alpha = 3
 
 	// the time after which a key/value pair expires; this is a time-to-live (TTL)
 	// from the original publication date; this is normally 86400s
@@ -57,7 +56,10 @@ type Kademlia struct {
 
 // Store stores data on the network. A sha-256 encoded identifier will be returned
 // if the store operation is successful
-func (kad *Kademlia) Store(data []byte) ([]byte, error) {
+func (kad *Kademlia) Store(data Data) ([]byte, error) {
+	key := data.Key()
+	if len(key) == 0 {
+	}
 	return nil, nil
 }
 

@@ -27,7 +27,7 @@ type Bucket [k]*Node
 //  ^                                                           ^
 //  └ Least recently seen                    Most recently seen ┘
 func (b *Bucket) AddNode(node *Node) {
-	if node == nil || len(node.Id) == 0 {
+	if !IsValidNode(node) {
 		return
 	}
 	if idx := b.indexOf(node); idx > -1 {
@@ -46,7 +46,7 @@ func (b *Bucket) AddNode(node *Node) {
 //     ^
 //     └ Remove node, then right pad the nodes on the left
 func (b *Bucket) RemoveNode(node *Node) {
-	if node == nil || len(node.Id) == 0 {
+	if !IsValidNode(node) {
 		return
 	}
 	if idx := b.indexOf(node); idx > -1 {
@@ -104,7 +104,12 @@ func (b *Bucket) String() string {
 			sb.WriteByte(0x2c)
 			sb.WriteByte(0x20)
 		}
-		sb.Write(node.HexString()[:8])
+		s := node.HexString()
+		if l := len(s); l > 8 {
+			sb.Write(s[:8])
+		} else {
+			sb.Write(s[:])
+		}
 		i++
 	}
 	sb.WriteByte(0x5d)
