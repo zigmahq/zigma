@@ -16,8 +16,15 @@
 
 package dht
 
+import "github.com/google/uuid"
+
 func compose(sender *Node) *Message {
-	return &Message{Sender: sender}
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		panic(err)
+	}
+	id, _ := uid.MarshalText()
+	return &Message{Id: id, Sender: sender}
 }
 
 func (m *Message) ping() *Message {

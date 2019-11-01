@@ -27,6 +27,7 @@ import (
 
 var (
 	kad1, kad2 *dht.Kademlia
+	n1, n2     *dht.Node
 	db1, db2   store.Store
 )
 
@@ -37,15 +38,23 @@ func init() {
 }
 
 func TestNewKademlia(t *testing.T) {
-	n1 := dht.MockNode(0)
+	n1 = dht.MockNode(0)
+	n2 = dht.MockNode(1)
 	r1 := dht.MockRPC(n1, true)
-	n2 := dht.MockNode(1)
 	r2 := dht.MockRPC(n2)
 
 	kad1 = dht.NewKademlia(n1, db1, r1)
 	kad2 = dht.NewKademlia(n2, db2, r2)
 	assert.NotNil(t, kad1)
 	assert.NotNil(t, kad2)
+}
+
+func TestKademliaPing(t *testing.T) {
+	ok := kad1.Ping(n2)
+	assert.True(t, ok)
+
+	ok = kad2.Ping(n1)
+	assert.True(t, ok)
 }
 
 func TestKademliaStore(t *testing.T) {
