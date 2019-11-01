@@ -21,42 +21,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zigmahq/zigma/dht"
-	"github.com/zigmahq/zigma/log"
-	"github.com/zigmahq/zigma/store"
 )
 
-var (
-	kad1, kad2 *dht.Kademlia
-	db1, db2   store.Store
-)
-
-func init() {
-	log.SetLevel(log.LogWarn)
-	db1 = store.TempBadgerStore()
-	db2 = store.TempBadgerStore()
+func TestHashableBytes(t *testing.T) {
+	b := []byte{0x68, 0x65, 0x6c, 0x6c, 0x6f}
+	h := dht.Bytes(b)
+	assert.NotNil(t, h)
+	assert.Equal(t, b, h.Data())
+	assert.Len(t, h.Hash(), 66)
 }
 
-func TestNewKademlia(t *testing.T) {
-	n1 := dht.MockNode(0)
-	r1 := dht.MockRPC(n1, true)
-	n2 := dht.MockNode(1)
-	r2 := dht.MockRPC(n2)
-
-	kad1 = dht.NewKademlia(n1, db1, r1)
-	kad2 = dht.NewKademlia(n2, db2, r2)
-	assert.NotNil(t, kad1)
-	assert.NotNil(t, kad2)
-}
-
-func TestKademliaStore(t *testing.T) {
-	kad1.Store(dht.String("hello world 1"))
-	kad1.Store(dht.Bytes([]byte{0x68, 0x65, 0x6c, 0x6c, 0x6f}))
-}
-
-func TestKademliaFindValue(t *testing.T) {
-}
-
-func TestKademliaFindNode(t *testing.T) {
-	defer db1.Close()
-	defer db2.Close()
+func TestHashableString(t *testing.T) {
+	s := "hello"
+	h := dht.String(s)
+	assert.NotNil(t, h)
+	assert.Equal(t, []byte(s), h.Data())
+	assert.Len(t, h.Hash(), 66)
 }

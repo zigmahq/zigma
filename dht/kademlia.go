@@ -63,7 +63,7 @@ type KademliaRPC interface {
 
 // Store stores data on the network. A sha-256 encoded identifier will be returned
 // if the store operation is successful
-func (kad *Kademlia) Store(data []byte) ([]byte, error) {
+func (kad *Kademlia) Store(data Hashable) ([]byte, error) {
 	return nil, nil
 }
 

@@ -25,11 +25,18 @@ import (
 )
 
 func TestNodeXOR(t *testing.T) {
-	expected := []byte{0x01, 0x00, 0x01}
-	n1 := &dht.Node{Hash: []byte{0x00, 0x00, 0x01}}
-	n2 := &dht.Node{Hash: []byte{0x01, 0x00, 0x00}}
+	expected := []byte{0x05}
+	n1 := &dht.Node{Hash: []byte{0x01}}
+	n2 := &dht.Node{Hash: []byte{0x04}}
 	xor := n1.XOR(n2)
 	assert.Equal(t, expected, xor)
+}
+
+func TestNodeXORDistance(t *testing.T) {
+	n1 := &dht.Node{Hash: []byte{0x01}}
+	n2 := &dht.Node{Hash: []byte{0x04}}
+	distance := n1.DistanceBetween(n2)
+	assert.Equal(t, 5, int(distance.Int64()))
 }
 
 func TestNodeZeroPrefixLen(t *testing.T) {
@@ -37,11 +44,4 @@ func TestNodeZeroPrefixLen(t *testing.T) {
 	n2 := &dht.Node{Hash: []byte{0x04}}
 	zl := n1.ZeroPrefixLen(n2)
 	assert.Equal(t, 5, zl)
-}
-
-func TestNodeDistanceBetween(t *testing.T) {
-	n1 := &dht.Node{Hash: []byte{0x01}}
-	n2 := &dht.Node{Hash: []byte{0x04}}
-	distance := n1.DistanceBetween(n2)
-	assert.Equal(t, 5, int(distance.Int64()))
 }
