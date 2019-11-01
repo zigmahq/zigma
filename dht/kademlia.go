@@ -103,8 +103,7 @@ func (kad *Kademlia) listen() {
 			// is equivalent to a FIND_NODE and a set of k triples is returned.
 			case MessageType_FIND_VALUE:
 				kad.table.Update(msg.Sender)
-				b, ok := kad.store.Get(msg.GetFind().Key)
-				if ok {
+				if b, ok := kad.store.Get(msg.GetFind().Key); ok {
 					kad.rpc.Write(msg.returnValue(b))
 				} else {
 					nodes := kad.table.Kclosest(k, &Node{Hash: msg.GetFind().Key}, msg.Sender)
