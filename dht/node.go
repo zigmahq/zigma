@@ -113,6 +113,10 @@ func (n *Node) XOR(comparator *Node) []byte {
 }
 
 // ZeroPrefixLen returns the number of consecutive zeroes in a byte slice
+// d(1, 4) = d(001₂, 100₂)
+// = 001₂ XOR 100₂
+// = 101₂
+// = 5
 func (n *Node) ZeroPrefixLen(comparator *Node) int {
 	distance := n.XOR(comparator)
 	for i, b := range distance {
