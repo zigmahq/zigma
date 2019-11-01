@@ -159,8 +159,10 @@ func NewContacts(comparator *Node, blacklist ...*Node) *Contacts {
 		Comparator: comparator,
 	}
 	for _, node := range blacklist {
-		id := c.nodeID(node)
-		c.blacklist[id] = struct{}{}
+		if node != nil {
+			id := c.nodeID(node)
+			c.blacklist[id] = struct{}{}
+		}
 	}
 	return c
 }

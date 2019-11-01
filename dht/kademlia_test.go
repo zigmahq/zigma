@@ -47,6 +47,9 @@ func TestNewKademlia(t *testing.T) {
 	kad2 = dht.NewKademlia(n2, db2, r2)
 	assert.NotNil(t, kad1)
 	assert.NotNil(t, kad2)
+
+	kad1.Bootstrap(n2)
+	kad2.Bootstrap(n1)
 }
 
 func TestKademliaPing(t *testing.T) {
@@ -60,6 +63,7 @@ func TestKademliaPing(t *testing.T) {
 func TestKademliaStore(t *testing.T) {
 	kad1.Store(dht.String("hello world 1"))
 	kad1.Store(dht.Bytes([]byte{0x68, 0x65, 0x6c, 0x6c, 0x6f}))
+	kad1.Store(dht.String("10101"))
 }
 
 func TestKademliaFindValue(t *testing.T) {

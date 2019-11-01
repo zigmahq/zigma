@@ -72,6 +72,11 @@ func (kad *Kademlia) Bootstrap(seeds ...*Node) {
 	}
 }
 
+// Table returns the dht network routing table
+func (kad *Kademlia) Table() *RoutingTable {
+	return kad.table
+}
+
 // Ping the specified contact node; returns true if pong is returned from receiver
 func (kad *Kademlia) Ping(node *Node) bool {
 	msg := compose(kad.table.Self).to(node).ping()
@@ -83,8 +88,16 @@ func (kad *Kademlia) Ping(node *Node) bool {
 // Store stores data on the network. A sha-256 encoded identifier will be returned
 // if the store operation is successful
 func (kad *Kademlia) Store(data Hashable) error {
-	msg := compose(kad.table.Self).store(data)
-	kad.rpc.Write(msg)
+	nodes := kad.table.Kclosest(0, &Node{
+		Id:   data.Hash(),
+		Hash: data.Hash(),
+	})
+	for _, node := range nodes {
+		go func(node *Node) {
+			msg := compose(kad.table.Self).to(node).store(data)
+			kad.rpc.Write(msg)
+		}(node)
+	}
 	return nil
 }
 
@@ -106,7 +119,7 @@ func (kad *Kademlia) listen() {
 	for {
 		select {
 		case msg := <-kad.rpc.Read():
-			if msg.IsResponse {
+			if msg == nil || msg.IsResponse || !msg.isValid() {
 				continue
 			}
 			switch msg.Type {
@@ -122,6 +135,7 @@ func (kad *Kademlia) listen() {
 				payload := msg.GetStore().Payload
 				kad.table.Update(msg.Sender)
 				kad.store.Set(payload.Key, payload.Data, 0)
+				kad.rpc.Write(msg.success(true))
 
 			// FIND_VALUE returns the associated data if corresponding value is
 			// present. Otherwise the RPC is equivalent to a FIND_NODE and a set

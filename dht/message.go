@@ -129,3 +129,26 @@ func (m *Message) to(receiver *Node) *Message {
 	m.Receiver = receiver
 	return m
 }
+
+func (m *Message) isValid() bool {
+	switch {
+	case m.Sender == nil || m.Receiver == nil:
+		return false
+
+	case m.Type == MessageType_PING:
+		return true
+
+	case m.Type == MessageType_FIND_VALUE:
+		return m.GetFind() != nil && len(m.GetFind().Key) > 0
+
+	case m.Type == MessageType_FIND_NODE:
+		return m.GetFind() != nil && len(m.GetFind().Key) > 0
+
+	case m.Type == MessageType_STORE:
+		if m.GetStore() != nil || m.GetStore().Payload != nil {
+			payload := m.GetStore().Payload
+			return len(payload.Key) > 0 && len(payload.Data) > 0
+		}
+	}
+	return false
+}
