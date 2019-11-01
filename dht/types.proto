@@ -65,8 +65,8 @@ message Message {
   bytes id = 1;
   MessageType type = 2;
   bool is_response = 3;
-  Node sender = 4;
-  Node receiver = 5;
+  Node sender = 5;
+  Node receiver = 6;
   oneof request {
     FindRequest find = 10;
     StoreRequest store = 11;

@@ -16,22 +16,69 @@
 
 package dht
 
+import (
+	"sync"
+	"time"
+	"unsafe"
+)
+
 var mrpcs []*mockRPC
 
 type mockRPC struct {
 	self    *Node
 	receive chan *Message
+	replies *sync.Map
 }
 
-func (m *mockRPC) Write(msg *Message) {
-	everyone := msg.Receiver == nil
+func (m *mockRPC) Write(msg *Message) func(time.Duration) <-chan *Message {
+	var id = *(*string)(unsafe.Pointer(&msg.Id))
+	var wc = make(chan *Message, 1)
+
+	if len(id) > 0 && !msg.IsResponse {
+		m.replies.Store(id, make(chan *Message, 1))
+	} else {
+		wc <- nil
+	}
+
 	for _, r := range mrpcs {
-		switch {
-		case everyone && r.self.Equal(m.self):
-			r.receive <- msg
-		case r.self.Equal(msg.Receiver):
-			r.receive <- msg
+		if r.self.Equal(msg.Receiver) {
+			go func() { r.receive <- msg }()
+			if len(id) > 0 && msg.IsResponse {
+				go func() {
+					if d, ok := r.replies.Load(id); ok {
+						d.(chan *Message) <- msg
+					}
+				}()
+			}
+			break
 		}
+	}
+	return func(timeout time.Duration) <-chan *Message {
+		if len(id) > 0 && !msg.IsResponse {
+			go func() {
+				var (
+					c chan *Message
+					t time.Duration
+				)
+				if timeout > 0 {
+					t = timeout
+				} else {
+					t = time.Second
+				}
+				if d, ok := m.replies.Load(id); ok {
+					c = d.(chan *Message)
+				}
+				select {
+				case msg := <-c:
+					wc <- msg
+				case <-time.After(t):
+					wc <- nil
+					close(c)
+					m.replies.Delete(id)
+				}
+			}()
+		}
+		return wc
 	}
 }
 
@@ -42,11 +89,12 @@ func (m *mockRPC) Read() <-chan *Message {
 // MockRPC returns a mock implementation of rpc for unit testing
 func MockRPC(self *Node, reset ...bool) KademliaRPC {
 	c := make(chan *Message)
-	r := &mockRPC{self, c}
+	r := new(sync.Map)
+	m := &mockRPC{self, c, r}
 	if len(reset) > 0 && reset[0] {
-		mrpcs = []*mockRPC{r}
+		mrpcs = []*mockRPC{m}
 	} else {
-		mrpcs = append(mrpcs, r)
+		mrpcs = append(mrpcs, m)
 	}
-	return r
+	return m
 }

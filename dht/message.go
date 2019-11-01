@@ -52,7 +52,7 @@ func (m *Message) store(payload Hashable) *Message {
 	return m
 }
 
-func (m *Message) receipt(success bool) *Message {
+func (m *Message) success(success bool) *Message {
 	var n = new(Message)
 	*n = *m
 

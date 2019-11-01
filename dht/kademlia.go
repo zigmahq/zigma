@@ -57,8 +57,27 @@ type Kademlia struct {
 
 // KademliaRPC represents the rpc interface for kademlia dht server
 type KademliaRPC interface {
-	Write(*Message)
+	Write(*Message) func(time.Duration) <-chan *Message
 	Read() <-chan *Message
+}
+
+// Bootstrap adds seed nodes to the network
+func (kad *Kademlia) Bootstrap(seeds ...*Node) {
+	for _, seed := range seeds {
+		go func(node *Node) {
+			if kad.Ping(node) {
+				kad.table.Update(node)
+			}
+		}(seed)
+	}
+}
+
+// Ping the specified contact node; returns true if pong is returned from receiver
+func (kad *Kademlia) Ping(node *Node) bool {
+	msg := compose(kad.table.Self).to(node).ping()
+	rec := kad.rpc.Write(msg)
+	out := <-rec(0)
+	return out != nil
 }
 
 // Store stores data on the network. A sha-256 encoded identifier will be returned
@@ -87,6 +106,9 @@ func (kad *Kademlia) listen() {
 	for {
 		select {
 		case msg := <-kad.rpc.Read():
+			if msg.IsResponse {
+				continue
+			}
 			switch msg.Type {
 			// PING RPC involves one node sending a PING message to another,
 			// which presumably replies with a PONG.
