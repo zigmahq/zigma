@@ -88,19 +88,22 @@ func (kad *Kademlia) listen() {
 		select {
 		case msg := <-kad.rpc.Read():
 			switch msg.Type {
-			// PING RPC involves one node sending a PING message to another, which presumably replies with a PONG.
+			// PING RPC involves one node sending a PING message to another,
+			// which presumably replies with a PONG.
 			case MessageType_PING:
 				kad.rpc.Write(msg.pong())
 
-			// The sender of the STORE RPC provides a key and a block of data and requires that the recipient
-			// store the data and make it available for later retrieval by that key.
+			// STORE RPC provides a key and a block of data and requires that the
+			// recipient store the data and make it available for later retrieval
+			// by that key.
 			case MessageType_STORE:
 				payload := msg.GetStore().Payload
 				kad.table.Update(msg.Sender)
 				kad.store.Set(payload.Key, payload.Data, 0)
 
-			// FIND_VALUE returns the associated data if corresponding value is present. Otherwise the RPC
-			// is equivalent to a FIND_NODE and a set of k triples is returned.
+			// FIND_VALUE returns the associated data if corresponding value is
+			// present. Otherwise the RPC is equivalent to a FIND_NODE and a set
+			// of k triples is returned.
 			case MessageType_FIND_VALUE:
 				kad.table.Update(msg.Sender)
 				if b, ok := kad.store.Get(msg.GetFind().Key); ok {
@@ -110,7 +113,8 @@ func (kad *Kademlia) listen() {
 					kad.rpc.Write(msg.returnClosest(nodes))
 				}
 
-			// FIND_NODE returns up to k triples for the contacts that it knows to be closest to the key
+			// FIND_NODE returns up to k triples for the contacts that it knows
+			// to be closest to the key
 			case MessageType_FIND_NODE:
 				kad.table.Update(msg.Sender)
 				nodes := kad.table.Kclosest(k, &Node{Hash: msg.GetFind().Key}, msg.Sender)

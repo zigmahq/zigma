@@ -31,9 +31,7 @@ func (m *Message) pong() *Message {
 
 	n.IsResponse = true
 	n.Sender, n.Receiver = n.Receiver, n.Sender
-	n.Response = &Message_Success{
-		Success: true,
-	}
+	n.Request = nil
 	return n
 }
 
@@ -60,6 +58,7 @@ func (m *Message) receipt(success bool) *Message {
 
 	n.IsResponse = true
 	n.Sender, n.Receiver = n.Receiver, n.Sender
+	n.Request = nil
 	n.Response = &Message_Success{
 		Success: success,
 	}
@@ -82,6 +81,7 @@ func (m *Message) returnClosest(nodes []*Node) *Message {
 
 	n.IsResponse = true
 	n.Sender, n.Receiver = n.Receiver, n.Sender
+	n.Request = nil
 	n.Response = &Message_Closest{
 		Closest: &Closest{
 			Nodes: nodes,
@@ -106,6 +106,7 @@ func (m *Message) returnValue(data []byte) *Message {
 
 	n.IsResponse = true
 	n.Sender, n.Receiver = n.Receiver, n.Sender
+	n.Request = nil
 	n.Response = &Message_Payload{
 		Payload: &Payload{
 			Key:  m.GetFind().Key,
