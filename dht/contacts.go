@@ -21,11 +21,11 @@ import (
 	"sync"
 )
 
-// currently, the key length cap is set to 64+2 bytes. most of the time this is more
-// than enough as the default hash function is set to sha3-256, which is in length
-// 32+2 bytes, but just a note that the key length might change in the future when
-// the hash type is changed, the length of the key is affected depends on the hash
-// type that we are using. capacity equation: (N bits / 8) + 2 bytes
+// the key length cap is set to 64+2 bytes. at the time of writing, this length is
+// more than enough as the default hash function is set to sha3-256, which the output
+// length is  32+2 bytes. but just a note that the length might change in the future
+// on hashing algorithm upgrade. capacity: 2 bytes + (number of digest bits / 8)
+// <varint hash function code><varint digest size in bytes><hash function output>
 const cc = 66
 
 // Contacts is used in order to sort a list of arbitrary nodes against a comparator

@@ -58,69 +58,69 @@ func BenchmarkNodesetInit(b *testing.B) {
 
 func BenchmarkNodeBucket(b *testing.B) {
 	b.ReportAllocs()
-	bucket.RemoveAllNodes()
+	bucket.RemoveAll()
 	t := len(nodeset)
 	for i := 0; i < b.N; i++ {
-		bucket.AddNode(nodeset[i%t])
+		bucket.Update(nodeset[i%t])
 	}
 	for i := 0; i < b.N; i++ {
-		bucket.RemoveNode(nodeset[i%t])
+		bucket.Remove(nodeset[i%t])
 	}
 }
 
-func TestBucketAddNode(t *testing.T) {
+func TestBucketUpdate(t *testing.T) {
 	var k = len(bucket)
-	bucket.RemoveAllNodes()
+	bucket.RemoveAll()
 	assert.Zero(t, bucket.Len())
 	for i := 0; i < k; i++ {
-		bucket.AddNode(nodeset[i])
+		bucket.Update(nodeset[i])
 		assert.Equal(t, i+1, bucket.Len())
 		assert.Equal(t, nodeset[i], bucket[len(bucket)-1])
 	}
 	for i := 0; i < k; i++ {
-		bucket.AddNode(nodeset[i])
+		bucket.Update(nodeset[i])
 		assert.Equal(t, k, bucket.Len())
 		assert.Equal(t, nodeset[i], bucket[len(bucket)-1])
 		if i < k-1 {
 			assert.Equal(t, nodeset[i+1], bucket[0])
 		}
 	}
-	bucket.AddNode(nodeset[1])
+	bucket.Update(nodeset[1])
 	assert.Equal(t, nodeset[1], bucket[len(bucket)-1])
 	assert.Equal(t, nodeset[2], bucket[1])
 }
 
-func TestBucketRemoveNode(t *testing.T) {
+func TestBucketRemove(t *testing.T) {
 	var k = len(bucket)
-	bucket.RemoveAllNodes()
+	bucket.RemoveAll()
 	assert.Zero(t, bucket.Len())
-	bucket.AddNode(nodeset[0])
-	bucket.AddNode(nodeset[1])
-	bucket.AddNode(nodeset[2])
-	bucket.AddNode(nodeset[3])
+	bucket.Update(nodeset[0])
+	bucket.Update(nodeset[1])
+	bucket.Update(nodeset[2])
+	bucket.Update(nodeset[3])
 	assert.Equal(t, 4, bucket.Len())
-	bucket.RemoveNode(nodeset[2])
+	bucket.Remove(nodeset[2])
 	assert.Equal(t, bucket[k-2], nodeset[1])
 	assert.Equal(t, bucket[k-3], nodeset[0])
 	assert.Equal(t, 3, bucket.Len())
-	bucket.RemoveNode(nodeset[3])
+	bucket.Remove(nodeset[3])
 	assert.Equal(t, bucket[k-1], nodeset[1])
 	assert.Equal(t, bucket[k-2], nodeset[0])
 	assert.Equal(t, 2, bucket.Len())
-	bucket.RemoveNode(nodeset[0])
+	bucket.Remove(nodeset[0])
 	assert.Equal(t, bucket[k-1], nodeset[1])
 	assert.Equal(t, 1, bucket.Len())
-	bucket.RemoveNode(nodeset[1])
+	bucket.Remove(nodeset[1])
 	assert.Equal(t, 0, bucket.Len())
 }
 
 func TestBucketIterator(t *testing.T) {
 	var n = 5
 	var count int
-	bucket.RemoveAllNodes()
+	bucket.RemoveAll()
 	assert.Zero(t, bucket.Len())
 	for i := 0; i < n; i++ {
-		bucket.AddNode(nodeset[i])
+		bucket.Update(nodeset[i])
 	}
 	assert.Equal(t, n, bucket.Len())
 	for node := range bucket.Iterator() {

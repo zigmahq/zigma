@@ -16,14 +16,39 @@
 
 package dht
 
-// Network interface
-type Network interface {
-	Send(*Message)
-	Receive() <-chan *Message
+import "bytes"
+
+var mrpcs []*mockRPC
+
+type mockRPC struct {
+	self    *Node
+	receive chan *Message
 }
 
-// Data interface
-type Data interface {
-	Key() []byte
-	Payload() []byte
+func (m *mockRPC) Write(msg *Message) {
+	everyone := len(msg.Receiver) == 0
+	for _, r := range mrpcs {
+		switch {
+		case everyone && !bytes.Equal(r.self.Id, m.self.Id):
+			r.receive <- msg
+		case bytes.Equal(r.self.Id, msg.Receiver):
+			r.receive <- msg
+		}
+	}
+}
+
+func (m *mockRPC) Read() <-chan *Message {
+	return m.receive
+}
+
+// MockRPC returns a mock implementation of rpc for unit testing
+func MockRPC(self *Node, reset ...bool) KademliaRPC {
+	c := make(chan *Message)
+	r := &mockRPC{self, c}
+	if len(reset) > 0 && reset[0] {
+		mrpcs = []*mockRPC{r}
+	} else {
+		mrpcs = append(mrpcs, r)
+	}
+	return r
 }

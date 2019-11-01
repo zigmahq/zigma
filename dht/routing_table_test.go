@@ -35,20 +35,20 @@ func TestNewRoutingTable(t *testing.T) {
 	assert.Len(t, table.Buckets, len(table.Self.Hash)*8)
 }
 
-func TestRoutingTableAddNode(t *testing.T) {
+func TestRoutingTableUpdate(t *testing.T) {
 	l := 10000
 	for i := 0; i < l; i++ {
 		node := dht.MockNode(i)
-		table.AddNode(node)
+		table.Update(node)
 	}
 	assert.True(t, table.Size() > 0)
 }
 
-func TestRoutingTableRemoveNode(t *testing.T) {
+func TestRoutingTableRemove(t *testing.T) {
 	l := 10000
 	for i := 0; i < l; i++ {
 		node := dht.MockNode(i)
-		table.RemoveNode(node)
+		table.Remove(node)
 	}
 	assert.Zero(t, table.Size())
 }
@@ -57,23 +57,23 @@ func TestRoutingTableKclosest(t *testing.T) {
 	ct1 := dht.MockNode(-2)
 	ct2 := dht.MockNode(-3)
 
-	table.AddNode(dht.MockNode(0))
+	table.Update(dht.MockNode(0))
 	nodes := table.Kclosest(0, ct1)
 	assert.Len(t, nodes, 1)
 	node1 := nodes[0]
 
-	table.AddNode(dht.MockNode(1))
+	table.Update(dht.MockNode(1))
 	nodes = table.Kclosest(0, ct1)
 	assert.Len(t, nodes, 2)
 	assert.Equal(t, node1, nodes[0])
 
-	table.AddNode(dht.MockNode(2))
+	table.Update(dht.MockNode(2))
 	nodes = table.Kclosest(0, ct1)
 	assert.Len(t, nodes, 3)
 	assert.NotEqual(t, node1, nodes[0])
 
 	for i := 3; i < 40; i++ {
-		table.AddNode(dht.MockNode(i))
+		table.Update(dht.MockNode(i))
 	}
 	nodes = table.Kclosest(10, ct1)
 	assert.Len(t, nodes, 10)
@@ -97,7 +97,7 @@ func TestRoutingTableKclosest(t *testing.T) {
 	assert.NotZero(t, len(other))
 
 	for i := 40; i < 1000; i++ {
-		table.AddNode(dht.MockNode(i))
+		table.Update(dht.MockNode(i))
 	}
 	other = table.Kclosest(0, ct1, nodes...)
 	assert.Len(t, other, 20)
@@ -115,6 +115,6 @@ func TestRoutingTableBucketCap(t *testing.T) {
 	table = dht.NewRoutingTable(dht.NodeFromHash(h1))
 	assert.Len(t, table.Buckets, 256)
 
-	table.AddNode(dht.NodeFromHash(h2))
+	table.Update(dht.NodeFromHash(h2))
 	assert.Len(t, table.Buckets, 512)
 }

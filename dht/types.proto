@@ -42,10 +42,17 @@ message Node {
   ConnectionType connection = 5;
 }
 
+message MessageHeader {
+}
+
+message MessagePayload {
+}
+
 message Message {
   bytes id = 1;
   MessageType type = 2;
-  bytes key = 10;
-  bytes data = 11;
-  bytes hash = 12;
+  bytes sender = 3;
+  bytes receiver = 4;
+  bytes payload = 5;
+  bytes hash = 6;
 }

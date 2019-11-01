@@ -21,12 +21,12 @@ import "strings"
 // Bucket implements the hashtable bucket
 type Bucket [k]*Node
 
-// AddNode adds a node to bucket
+// Update adds a node to bucket
 // Nodes within buckets are sorted by least recently seen e.g.
 // [ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ]
 //  ^                                                           ^
 //  └ Least recently seen                    Most recently seen ┘
-func (b *Bucket) AddNode(node *Node) {
+func (b *Bucket) Update(node *Node) {
 	if !IsValidNode(node) {
 		return
 	}
@@ -40,12 +40,12 @@ func (b *Bucket) AddNode(node *Node) {
 	b[k-1] = node
 }
 
-// RemoveNode removes a node from the bucket
+// Remove removes a node from the bucket
 // [a][b][c][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ]
 // [ ][a][c][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ][ ]
 //     ^
 //     └ Remove node, then right pad the nodes on the left
-func (b *Bucket) RemoveNode(node *Node) {
+func (b *Bucket) Remove(node *Node) {
 	if !IsValidNode(node) {
 		return
 	}
@@ -61,8 +61,8 @@ func (b *Bucket) RemoveNode(node *Node) {
 	}
 }
 
-// RemoveAllNodes removes all nodes from bucket
-func (b *Bucket) RemoveAllNodes() {
+// RemoveAll removes all nodes from bucket
+func (b *Bucket) RemoveAll() {
 	for i := 0; i < k; i++ {
 		b[i] = nil
 	}

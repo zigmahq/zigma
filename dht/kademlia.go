@@ -31,7 +31,7 @@ const (
 	k = 20
 
 	// the number representing the degree of parallelism in network calls
-	alpha = 3
+	a = 3
 
 	// the time after which a key/value pair expires; this is a time-to-live (TTL)
 	// from the original publication date; this is normally 86400s
@@ -52,14 +52,18 @@ const (
 type Kademlia struct {
 	table *RoutingTable
 	store store.Store
+	rpc   KademliaRPC
+}
+
+// KademliaRPC represents the rpc interface for kademlia dht server
+type KademliaRPC interface {
+	Write(*Message)
+	Read() <-chan *Message
 }
 
 // Store stores data on the network. A sha-256 encoded identifier will be returned
 // if the store operation is successful
-func (kad *Kademlia) Store(data Data) ([]byte, error) {
-	key := data.Key()
-	if len(key) == 0 {
-	}
+func (kad *Kademlia) Store(data []byte) ([]byte, error) {
 	return nil, nil
 }
 
@@ -73,12 +77,32 @@ func (kad *Kademlia) FindNode(key []byte) (*Node, error) {
 	return nil, nil
 }
 
+func (kad *Kademlia) listen() {
+	for {
+		select {
+		case msg := <-kad.rpc.Read():
+			if msg != nil {
+				switch msg.Type {
+				case MessageType_NOOP:
+					return
+				case MessageType_PING:
+				case MessageType_STORE:
+				case MessageType_FIND_NODE:
+				case MessageType_FIND_VALUE:
+				}
+			}
+		}
+	}
+}
+
 // NewKademlia initializes a DHT kademlia service
-func NewKademlia(self *Node, store store.Store) *Kademlia {
+func NewKademlia(self *Node, store store.Store, rpc KademliaRPC) *Kademlia {
 	r := NewRoutingTable(self)
 	k := &Kademlia{
 		table: r,
 		store: store,
+		rpc:   rpc,
 	}
+	go k.listen()
 	return k
 }
