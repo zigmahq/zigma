@@ -16,8 +16,6 @@
 
 package dht
 
-import "bytes"
-
 var mrpcs []*mockRPC
 
 type mockRPC struct {
@@ -26,12 +24,12 @@ type mockRPC struct {
 }
 
 func (m *mockRPC) Write(msg *Message) {
-	everyone := len(msg.Receiver) == 0
+	everyone := msg.Receiver == nil
 	for _, r := range mrpcs {
 		switch {
-		case everyone && !bytes.Equal(r.self.Id, m.self.Id):
+		case everyone && r.self.Equal(m.self):
 			r.receive <- msg
-		case bytes.Equal(r.self.Id, msg.Receiver):
+		case r.self.Equal(msg.Receiver):
 			r.receive <- msg
 		}
 	}

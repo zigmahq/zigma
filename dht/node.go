@@ -96,7 +96,7 @@ func (n *Node) HexString() []byte {
 
 // Equal checks if two nodes are equal
 func (n *Node) Equal(comparator *Node) bool {
-	return bytes.Equal(n.Id, comparator.Id)
+	return comparator != nil && bytes.Equal(n.Id, comparator.Id)
 }
 
 // XOR calculates instance between two nodes

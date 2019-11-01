@@ -54,9 +54,9 @@ func TestMockRPCReadWrite(t *testing.T) {
 	go func() {
 		for i := 0; i < l; i++ {
 			if i%2 == 0 {
-				r1.Write(&dht.Message{Receiver: n2.Id, Payload: []byte{0x01}})
+				r1.Write(&dht.Message{Receiver: n2})
 			} else {
-				r2.Write(&dht.Message{Receiver: n1.Id, Payload: []byte{0x02}})
+				r2.Write(&dht.Message{Receiver: n1})
 			}
 		}
 	}()

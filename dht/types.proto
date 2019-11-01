@@ -42,12 +42,38 @@ message Node {
   ConnectionType connection = 5;
 }
 
+message Payload {
+  bytes key = 1;
+  bytes data = 2;
+  bytes hash = 3;
+  bytes sig = 4;
+}
+
+message Closest {
+  repeated Node nodes = 1;
+}
+
+message FindRequest {
+  bytes key = 1;
+}
+
+message StoreRequest {
+  Payload payload = 1;
+}
+
 message Message {
   bytes id = 1;
   MessageType type = 2;
-  bytes sender = 3;
-  bytes receiver = 4;
-  bytes payload = 5;
-  bytes hash = 6;
-  bytes sig = 7;
+  bool is_response = 3;
+  Node sender = 4;
+  Node receiver = 5;
+  oneof request {
+    FindRequest find = 10;
+    StoreRequest store = 11;
+  }
+  oneof response {
+    bool success = 20;
+    Payload payload = 21;
+    Closest closest = 22;
+  }
 }
