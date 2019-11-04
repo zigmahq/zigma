@@ -30,7 +30,7 @@ type mockRPC struct {
 	replies *sync.Map
 }
 
-func (m *mockRPC) Write(msg *Message) func(time.Duration) <-chan *Message {
+func (m *mockRPC) Write(msg *Message) KademliaReplyFn {
 	var id = *(*string)(unsafe.Pointer(&msg.Id))
 	var wc = make(chan *Message, 1)
 

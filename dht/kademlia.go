@@ -56,9 +56,13 @@ type Kademlia struct {
 	rpc   KademliaRPC
 }
 
+// KademliaReplyFn represents the wait-for-response function for KademliaRPC, passing
+// a time.Duration as waiting timeout; default reply timeout is half a second
+type KademliaReplyFn func(time.Duration) <-chan *Message
+
 // KademliaRPC represents the network rpc interface for kademlia dht server
 type KademliaRPC interface {
-	Write(*Message) func(time.Duration) <-chan *Message
+	Write(*Message) KademliaReplyFn
 	Read() <-chan *Message
 }
 
