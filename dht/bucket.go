@@ -33,9 +33,6 @@ type Bucket struct {
 //  ^                                                           ^
 //  └ Least recently seen                    Most recently seen ┘
 func (b *Bucket) Update(node *Node) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
 	if !IsValidNode(node) {
 		return
 	}
@@ -43,6 +40,9 @@ func (b *Bucket) Update(node *Node) {
 		b.markSeen(idx)
 		return
 	}
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	for i := 0; i < k-1; i++ {
 		b.nodes[i] = b.nodes[i+1]
 	}
@@ -55,13 +55,13 @@ func (b *Bucket) Update(node *Node) {
 //     ^
 //     └ Remove node, then right pad the nodes on the left
 func (b *Bucket) Remove(node *Node) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
 	if !IsValidNode(node) {
 		return
 	}
 	if idx := b.indexOf(node); idx > -1 {
+		b.mutex.Lock()
+		defer b.mutex.Unlock()
+
 		var l = idx
 		for i := idx; i > 0; i-- {
 			if b.nodes[i] != nil {
@@ -85,12 +85,12 @@ func (b *Bucket) RemoveAll() {
 
 // Iterator iterate over active nodes in the bucket
 func (b *Bucket) Iterator() <-chan *Node {
-	b.mutex.RLock()
-	defer b.mutex.RUnlock()
-
 	ch := make(chan *Node, k)
 	go func() {
+		b.mutex.RLock()
+		defer b.mutex.RUnlock()
 		defer close(ch)
+
 		for i := k - 1; i >= 0; i-- {
 			if b.nodes[i] == nil {
 				return
@@ -157,6 +157,9 @@ func (b *Bucket) String() string {
 }
 
 func (b *Bucket) markSeen(idx int) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	t := b.nodes[idx]
 	for i := idx; i < k-1; i++ {
 		b.nodes[i] = b.nodes[i+1]
@@ -165,6 +168,9 @@ func (b *Bucket) markSeen(idx int) {
 }
 
 func (b *Bucket) indexOf(node *Node) int {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
 	for i := k - 1; i >= 0; i-- {
 		if b.nodes[i] == nil {
 			break

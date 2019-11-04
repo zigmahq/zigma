@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	n         = 20
+	n         = 80
 	kadList   = make([]*dht.Kademlia, n)
 	rpcList   = make([]dht.KademliaRPC, n)
 	nodeList  = make([]*dht.Node, n)

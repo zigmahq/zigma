@@ -69,14 +69,13 @@ func (r *RoutingTable) Kclosest(num int, contact *Node, ignoredNodes ...*Node) [
 
 // Update insert a node to routing table
 func (r *RoutingTable) Update(node *Node) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	if !IsValidNode(node) {
 		return
 	}
-
 	r.shouldUpdateBucketCap(node)
+
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	bucket := r.bucketFromNode(node)
 	bucket.Update(node)
@@ -84,12 +83,11 @@ func (r *RoutingTable) Update(node *Node) {
 
 // Remove removes a node from routing table
 func (r *RoutingTable) Remove(node *Node) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
 	if !IsValidNode(node) {
 		return
 	}
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	bucket := r.bucketFromNode(node)
 	bucket.Remove(node)
@@ -97,6 +95,9 @@ func (r *RoutingTable) Remove(node *Node) {
 
 func (r *RoutingTable) shouldUpdateBucketCap(node *Node) {
 	if b := len(node.Hash) * 8; b > r.b {
+		r.mutex.Lock()
+		defer r.mutex.Unlock()
+
 		t := make([]*Bucket, b-r.b)
 		o := make([]time.Time, b-r.b)
 		n := time.Now()

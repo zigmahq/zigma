@@ -210,6 +210,7 @@ func (kad *Kademlia) listen() {
 				continue
 			}
 			switch msg.Type {
+
 			// PING RPC involves one node sending a PING message to another,
 			// which presumably replies with a PONG.
 			case MessageType_PING:
