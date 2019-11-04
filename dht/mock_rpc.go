@@ -74,8 +74,8 @@ func (m *mockRPC) Write(msg *Message) func(time.Duration) <-chan *Message {
 				case <-time.After(t):
 					wc <- nil
 					close(c)
-					m.replies.Delete(id)
 				}
+				m.replies.Delete(id)
 			}()
 		}
 		return wc
