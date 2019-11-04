@@ -17,12 +17,16 @@
 
 package dht
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // RoutingTable implements the routing table state
 type RoutingTable struct {
 	mutex   *sync.RWMutex
 	b       int
+	refresh []time.Time
 	Self    *Node
 	Buckets []*Bucket
 }
@@ -94,10 +98,14 @@ func (r *RoutingTable) Remove(node *Node) {
 func (r *RoutingTable) shouldUpdateBucketCap(node *Node) {
 	if b := len(node.Hash) * 8; b > r.b {
 		t := make([]*Bucket, b-r.b)
+		o := make([]time.Time, b-r.b)
+		n := time.Now()
 		for i := 0; i < len(t); i++ {
 			t[i] = NewBucket()
+			o[i] = n
 		}
 		r.Buckets = append(r.Buckets, t...)
+		r.refresh = append(r.refresh, o...)
 		r.b = b
 	}
 }
@@ -117,9 +125,11 @@ func (r *RoutingTable) Size() int {
 // NewRoutingTable initializes a new hashtable instance
 func NewRoutingTable(self *Node) *RoutingTable {
 	b := len(self.Hash) * 8
+	n := time.Now()
 	r := &RoutingTable{
 		mutex:   new(sync.RWMutex),
 		b:       b,
+		refresh: make([]time.Time, b),
 		Self:    self,
 		Buckets: make([]*Bucket, b),
 	}
@@ -127,6 +137,7 @@ func NewRoutingTable(self *Node) *RoutingTable {
 	defer r.mutex.Unlock()
 
 	for i := 0; i < len(r.Buckets); i++ {
+		r.refresh[i] = n
 		r.Buckets[i] = NewBucket()
 	}
 	return r

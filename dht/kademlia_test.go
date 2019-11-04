@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	n         = 100
+	n         = 20
 	kadList   = make([]*dht.Kademlia, n)
 	rpcList   = make([]dht.KademliaRPC, n)
 	nodeList  = make([]*dht.Node, n)
@@ -42,7 +42,9 @@ func init() {
 func done() {
 	for i := 0; i < n; i++ {
 		db := storeList[i]
+		kad := kadList[i]
 		db.Close()
+		kad.Stop()
 	}
 }
 
@@ -85,17 +87,18 @@ func TestKademliaPing(t *testing.T) {
 }
 
 func TestKademliaStore(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < n; i++ {
 		r := rand.Intn(n - 1)
 
 		hs := dht.String(fmt.Sprintf("hello world %v", i))
-		success := kadList[r].Store(hs)
+		key, success := kadList[r].Store(hs)
+		assert.NotEmpty(t, key)
 		assert.True(t, success > 0)
 	}
 }
 
 func TestKademliaFindValue(t *testing.T) {
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < n; i++ {
 		r := rand.Intn(n - 1)
 
 		hs := dht.String(fmt.Sprintf("hello world %v", i))

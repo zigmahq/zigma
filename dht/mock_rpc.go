@@ -22,7 +22,15 @@ import (
 	"unsafe"
 )
 
-var mrpcs []*mockRPC
+var mrpcs = &mockRPCs{
+	mutex: new(sync.RWMutex),
+	rpcs:  make([]*mockRPC, 0),
+}
+
+type mockRPCs struct {
+	mutex *sync.RWMutex
+	rpcs  []*mockRPC
+}
 
 type mockRPC struct {
 	self    *Node
@@ -31,52 +39,51 @@ type mockRPC struct {
 }
 
 func (m *mockRPC) Write(msg *Message) KademliaReplyFn {
-	var id = *(*string)(unsafe.Pointer(&msg.Id))
-	var wc = make(chan *Message, 1)
+	var (
+		id    = *(*string)(unsafe.Pointer(&msg.Id))
+		wc    = make(chan *Message, 1)
+		reply = len(id) > 0 && !msg.IsResponse
+	)
 
-	if len(id) > 0 && !msg.IsResponse {
+	if reply {
 		m.replies.Store(id, make(chan *Message, 1))
 	} else {
 		wc <- nil
 	}
 
-	for _, r := range mrpcs {
+	mrpcs.mutex.RLock()
+	defer mrpcs.mutex.RUnlock()
+	for _, r := range mrpcs.rpcs {
 		if r.self.Equal(msg.Receiver) {
 			go func() { r.receive <- msg }()
-			if len(id) > 0 && msg.IsResponse {
-				go func() {
-					if d, ok := r.replies.Load(id); ok {
-						d.(chan *Message) <- msg
-					}
-				}()
+			if d, ok := r.replies.Load(id); ok && len(id) > 0 && msg.IsResponse {
+				go func() { d.(chan *Message) <- msg }()
 			}
 			break
 		}
 	}
+
 	return func(timeout time.Duration) <-chan *Message {
-		if len(id) > 0 && !msg.IsResponse {
-			go func() {
-				var (
-					c chan *Message
-					t time.Duration
-				)
-				if timeout > 0 {
-					t = timeout
-				} else {
-					t = time.Second / 2
-				}
-				if d, ok := m.replies.Load(id); ok {
-					c = d.(chan *Message)
-				}
-				select {
-				case msg := <-c:
-					wc <- msg
-				case <-time.After(t):
-					wc <- nil
-					close(c)
-				}
-				m.replies.Delete(id)
-			}()
+		if reply {
+			if d, ok := m.replies.Load(id); ok {
+				c := d.(chan *Message)
+				go func() {
+					var t time.Duration
+					if timeout > 0 {
+						t = timeout
+					} else {
+						t = time.Second / 2
+					}
+					select {
+					case msg := <-c:
+						wc <- msg
+					case <-time.After(t):
+						wc <- nil
+						close(c)
+					}
+					m.replies.Delete(id)
+				}()
+			}
 		}
 		return wc
 	}
@@ -88,13 +95,16 @@ func (m *mockRPC) Read() <-chan *Message {
 
 // MockRPC returns a mock implementation of rpc for unit testing
 func MockRPC(self *Node, reset ...bool) KademliaRPC {
+	mrpcs.mutex.Lock()
+	defer mrpcs.mutex.Unlock()
+
 	c := make(chan *Message)
 	r := new(sync.Map)
 	m := &mockRPC{self, c, r}
 	if len(reset) > 0 && reset[0] {
-		mrpcs = []*mockRPC{m}
+		mrpcs.rpcs = []*mockRPC{m}
 	} else {
-		mrpcs = append(mrpcs, m)
+		mrpcs.rpcs = append(mrpcs.rpcs, m)
 	}
 	return m
 }

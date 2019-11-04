@@ -69,29 +69,29 @@ func BenchmarkNodeBucket(b *testing.B) {
 }
 
 func TestBucketUpdate(t *testing.T) {
-	var k = len(bucket)
+	var k = bucket.Cap()
 	bucket.RemoveAll()
 	assert.Zero(t, bucket.Len())
 	for i := 0; i < k; i++ {
 		bucket.Update(nodeset[i])
 		assert.Equal(t, i+1, bucket.Len())
-		assert.Equal(t, nodeset[i], bucket[len(bucket)-1])
+		assert.Equal(t, nodeset[i], bucket.At(k-1))
 	}
 	for i := 0; i < k; i++ {
 		bucket.Update(nodeset[i])
 		assert.Equal(t, k, bucket.Len())
-		assert.Equal(t, nodeset[i], bucket[len(bucket)-1])
+		assert.Equal(t, nodeset[i], bucket.At(k-1))
 		if i < k-1 {
-			assert.Equal(t, nodeset[i+1], bucket[0])
+			assert.Equal(t, nodeset[i+1], bucket.At(0))
 		}
 	}
 	bucket.Update(nodeset[1])
-	assert.Equal(t, nodeset[1], bucket[len(bucket)-1])
-	assert.Equal(t, nodeset[2], bucket[1])
+	assert.Equal(t, nodeset[1], bucket.At(k-1))
+	assert.Equal(t, nodeset[2], bucket.At(1))
 }
 
 func TestBucketRemove(t *testing.T) {
-	var k = len(bucket)
+	var k = bucket.Cap()
 	bucket.RemoveAll()
 	assert.Zero(t, bucket.Len())
 	bucket.Update(nodeset[0])
@@ -100,15 +100,15 @@ func TestBucketRemove(t *testing.T) {
 	bucket.Update(nodeset[3])
 	assert.Equal(t, 4, bucket.Len())
 	bucket.Remove(nodeset[2])
-	assert.Equal(t, bucket[k-2], nodeset[1])
-	assert.Equal(t, bucket[k-3], nodeset[0])
+	assert.Equal(t, bucket.At(k-2), nodeset[1])
+	assert.Equal(t, bucket.At(k-3), nodeset[0])
 	assert.Equal(t, 3, bucket.Len())
 	bucket.Remove(nodeset[3])
-	assert.Equal(t, bucket[k-1], nodeset[1])
-	assert.Equal(t, bucket[k-2], nodeset[0])
+	assert.Equal(t, bucket.At(k-1), nodeset[1])
+	assert.Equal(t, bucket.At(k-2), nodeset[0])
 	assert.Equal(t, 2, bucket.Len())
 	bucket.Remove(nodeset[0])
-	assert.Equal(t, bucket[k-1], nodeset[1])
+	assert.Equal(t, bucket.At(k-1), nodeset[1])
 	assert.Equal(t, 1, bucket.Len())
 	bucket.Remove(nodeset[1])
 	assert.Equal(t, 0, bucket.Len())

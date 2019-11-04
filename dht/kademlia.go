@@ -17,7 +17,6 @@
 package dht
 
 import (
-	"sync"
 	"time"
 
 	"github.com/multiformats/go-multihash"
@@ -36,7 +35,7 @@ const (
 
 	// the time after which a key/value pair expires; this is a time-to-live (TTL)
 	// from the original publication date; this is normally 86400s
-	tExpire = time.Hour * 24
+	tExpire = time.Hour * 48
 
 	// the time after which an otherwise unaccessed bucket must be refreshed
 	tRefresh = time.Hour
@@ -54,6 +53,7 @@ type Kademlia struct {
 	table *RoutingTable
 	store store.Store
 	rpc   KademliaRPC
+	stop  chan struct{}
 }
 
 // KademliaReplyFn represents the wait-for-response function for KademliaRPC, passing
@@ -77,6 +77,11 @@ func (kad *Kademlia) Bootstrap(seeds ...*Node) {
 	}
 }
 
+// Stop stops the kademlia server
+func (kad *Kademlia) Stop() {
+	kad.stop <- struct{}{}
+}
+
 // Table returns the dht network routing table
 func (kad *Kademlia) Table() *RoutingTable {
 	return kad.table
@@ -92,8 +97,13 @@ func (kad *Kademlia) Ping(node *Node) bool {
 
 // Store stores data on the network. A sha-256 encoded identifier will be returned
 // if the store operation is successful
-func (kad *Kademlia) Store(data Hashable) int {
-	return kad.iterativeStore(data)
+func (kad *Kademlia) Store(data Hashable) ([]byte, int) {
+	if data != nil {
+		if writes := kad.iterativeStore(data); writes > 0 {
+			return data.Key(), writes
+		}
+	}
+	return nil, 0
 }
 
 // FindNode returns a node from the networking using key
@@ -103,8 +113,7 @@ func (kad *Kademlia) Store(data Hashable) int {
 // must return k items (unless there are fewer than k nodes in all its k-buckets
 // combined, in which case it returns every node it knows about).
 func (kad *Kademlia) FindNode(key []byte) *Node {
-	contacts := kad.iterativeFindNode(key)
-	if contacts.Len() > 0 {
+	if contacts := kad.iterativeFindNode(key); contacts.Len() > 0 {
 		return contacts.Nodes()[0]
 	}
 	return nil
@@ -120,21 +129,29 @@ func (kad *Kademlia) iterativeStore(data Hashable) int {
 	if contacts.Len() == 0 {
 		return 0
 	}
-	var wg sync.WaitGroup
-	var success int
+	var (
+		c, i int
+		ch   = make(chan bool)
+	)
 	for _, node := range contacts.Nodes() {
-		wg.Add(1)
 		go func(node *Node) {
-			defer wg.Done()
 			msg := compose(kad.table.Self).to(node).store(data)
 			rec := kad.rpc.Write(msg)
-			if out := <-rec(0); out != nil && out.GetSuccess() {
-				success++
-			}
+			out := <-rec(0)
+			ch <- out != nil && out.GetSuccess()
 		}(node)
 	}
-	wg.Wait()
-	return success
+	for success := range ch {
+		if i == contacts.Len()-1 {
+			close(ch)
+			break
+		}
+		if success {
+			c++
+		}
+		i++
+	}
+	return c
 }
 
 func (kad *Kademlia) iterativeFindNode(key []byte) *Contacts {
@@ -186,6 +203,8 @@ func (kad *Kademlia) iterativeFindValue(key []byte) ([]byte, bool) {
 func (kad *Kademlia) listen() {
 	for {
 		select {
+		case <-kad.stop:
+			return
 		case msg := <-kad.rpc.Read():
 			if msg == nil || msg.IsResponse || !msg.isValid() {
 				continue
@@ -202,7 +221,7 @@ func (kad *Kademlia) listen() {
 			case MessageType_STORE:
 				payload := msg.GetStore().Payload
 				kad.table.Update(msg.Sender)
-				kad.store.Set(payload.Key, payload.Data, 0)
+				kad.store.Set(payload.Key, payload.Data, tExpire)
 				kad.rpc.Write(msg.success(true))
 
 			// FIND_VALUE returns the associated data if corresponding value is
@@ -228,14 +247,42 @@ func (kad *Kademlia) listen() {
 	}
 }
 
+func (kad *Kademlia) refreshBuckets() {
+	for i, at := range kad.table.refresh {
+		if at.IsZero() || time.Since(at) > tRefresh {
+			kad.table.refresh[i] = time.Now()
+		}
+	}
+}
+
+func (kad *Kademlia) storeReplication() {
+}
+
+func (kad *Kademlia) scheduleTasks() {
+	ticker := time.NewTicker(time.Minute)
+	for {
+		select {
+		case <-ticker.C:
+			kad.storeReplication()
+			kad.refreshBuckets()
+		case <-kad.stop:
+			ticker.Stop()
+			return
+		}
+	}
+}
+
 // NewKademlia initializes a DHT kademlia service
 func NewKademlia(self *Node, store store.Store, rpc KademliaRPC) *Kademlia {
-	r := NewRoutingTable(self)
+	t := NewRoutingTable(self)
+	s := make(chan struct{})
 	k := &Kademlia{
-		table: r,
+		table: t,
+		stop:  s,
 		store: store,
 		rpc:   rpc,
 	}
 	go k.listen()
+	go k.scheduleTasks()
 	return k
 }

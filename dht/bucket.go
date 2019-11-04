@@ -16,10 +16,16 @@
 
 package dht
 
-import "strings"
+import (
+	"strings"
+	"sync"
+)
 
 // Bucket implements the hashtable bucket
-type Bucket [k]*Node
+type Bucket struct {
+	mutex *sync.RWMutex
+	nodes [k]*Node
+}
 
 // Update adds a node to bucket
 // Nodes within buckets are sorted by least recently seen e.g.
@@ -27,6 +33,9 @@ type Bucket [k]*Node
 //  ^                                                           ^
 //  └ Least recently seen                    Most recently seen ┘
 func (b *Bucket) Update(node *Node) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	if !IsValidNode(node) {
 		return
 	}
@@ -35,9 +44,9 @@ func (b *Bucket) Update(node *Node) {
 		return
 	}
 	for i := 0; i < k-1; i++ {
-		b[i] = b[i+1]
+		b.nodes[i] = b.nodes[i+1]
 	}
-	b[k-1] = node
+	b.nodes[k-1] = node
 }
 
 // Remove removes a node from the bucket
@@ -46,48 +55,68 @@ func (b *Bucket) Update(node *Node) {
 //     ^
 //     └ Remove node, then right pad the nodes on the left
 func (b *Bucket) Remove(node *Node) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	if !IsValidNode(node) {
 		return
 	}
 	if idx := b.indexOf(node); idx > -1 {
 		var l = idx
 		for i := idx; i > 0; i-- {
-			if b[i] != nil {
+			if b.nodes[i] != nil {
 				l = i
 			}
-			b[i] = b[i-1]
+			b.nodes[i] = b.nodes[i-1]
 		}
-		b[l] = nil
+		b.nodes[l] = nil
 	}
 }
 
 // RemoveAll removes all nodes from bucket
 func (b *Bucket) RemoveAll() {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	for i := 0; i < k; i++ {
-		b[i] = nil
+		b.nodes[i] = nil
 	}
 }
 
 // Iterator iterate over active nodes in the bucket
 func (b *Bucket) Iterator() <-chan *Node {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
 	ch := make(chan *Node, k)
 	go func() {
 		defer close(ch)
 		for i := k - 1; i >= 0; i-- {
-			if b[i] == nil {
+			if b.nodes[i] == nil {
 				return
 			}
-			ch <- b[i]
+			ch <- b.nodes[i]
 		}
 	}()
 	return ch
 }
 
+// At returns the node at bucket index
+func (b *Bucket) At(idx int) *Node {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
+	return b.nodes[idx]
+}
+
 // Len calculates the node size of the bucket
 func (b *Bucket) Len() int {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
 	var total int
 	for i := k - 1; i >= 0; i-- {
-		if b[i] == nil {
+		if b.nodes[i] == nil {
 			break
 		}
 		total++
@@ -95,7 +124,18 @@ func (b *Bucket) Len() int {
 	return total
 }
 
+// Cap returns the maximum number of nodes that it could store
+func (b *Bucket) Cap() int {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
+	return len(b.nodes)
+}
+
 func (b *Bucket) String() string {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
 	var sb strings.Builder
 	var i int
 	sb.WriteByte(0x5b)
@@ -117,19 +157,19 @@ func (b *Bucket) String() string {
 }
 
 func (b *Bucket) markSeen(idx int) {
-	t := b[idx]
+	t := b.nodes[idx]
 	for i := idx; i < k-1; i++ {
-		b[i] = b[i+1]
+		b.nodes[i] = b.nodes[i+1]
 	}
-	b[k-1] = t
+	b.nodes[k-1] = t
 }
 
 func (b *Bucket) indexOf(node *Node) int {
 	for i := k - 1; i >= 0; i-- {
-		if b[i] == nil {
+		if b.nodes[i] == nil {
 			break
 		}
-		if b[i].Equal(node) {
+		if b.nodes[i].Equal(node) {
 			return i
 		}
 	}
@@ -138,5 +178,8 @@ func (b *Bucket) indexOf(node *Node) int {
 
 // NewBucket initializes a bucket instance
 func NewBucket() *Bucket {
-	return new(Bucket)
+	return &Bucket{
+		mutex: new(sync.RWMutex),
+		nodes: [k]*Node{},
+	}
 }

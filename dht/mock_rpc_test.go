@@ -65,16 +65,15 @@ func TestMockRPCReadWrite(t *testing.T) {
 	go func() {
 		for range r {
 			i++
+			if l == i {
+				c <- struct{}{}
+				break
+			}
 		}
 	}()
 
-	go func() {
-		time.Sleep(time.Second)
-		assert.Equal(t, l, i)
-		c <- struct{}{}
-	}()
-
 	<-c
+	assert.Equal(t, l, i)
 }
 
 func TestMockRPCWriteResponse(t *testing.T) {
