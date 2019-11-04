@@ -20,13 +20,22 @@ import "github.com/multiformats/go-multihash"
 
 // Hashable type
 type Hashable interface {
+	Key() []byte
 	Data() []byte
 	Hash() []byte
 }
 
 type hashable struct {
-	data []byte
-	hash []byte
+	customKey []byte
+	data      []byte
+	hash      []byte
+}
+
+func (h *hashable) Key() []byte {
+	if len(h.customKey) > 0 {
+		return h.customKey
+	}
+	return h.Hash()
 }
 
 func (h *hashable) Data() []byte {

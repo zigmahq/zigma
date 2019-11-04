@@ -17,6 +17,7 @@
 package dht
 
 import (
+	"sync"
 	"time"
 
 	"github.com/multiformats/go-multihash"
@@ -55,7 +56,7 @@ type Kademlia struct {
 	rpc   KademliaRPC
 }
 
-// KademliaRPC represents the rpc interface for kademlia dht server
+// KademliaRPC represents the network rpc interface for kademlia dht server
 type KademliaRPC interface {
 	Write(*Message) func(time.Duration) <-chan *Message
 	Read() <-chan *Message
@@ -88,31 +89,87 @@ func (kad *Kademlia) Ping(node *Node) bool {
 // Store stores data on the network. A sha-256 encoded identifier will be returned
 // if the store operation is successful
 func (kad *Kademlia) Store(data Hashable) error {
-	nodes := kad.table.Kclosest(0, &Node{
-		Id:   data.Hash(),
-		Hash: data.Hash(),
-	})
-	for _, node := range nodes {
-		go func(node *Node) {
-			msg := compose(kad.table.Self).to(node).store(data)
-			kad.rpc.Write(msg)
-		}(node)
-	}
+	kad.iterativeStore(data)
 	return nil
+}
+
+// FindNode returns a node from the networking using key
+// The recipient of a the RPC returns k nodes it knows about closest to the target
+// ID. These triples can come from a single k-bucket, or they may come from multiple
+// k-buckets if the closest k-bucket is not full. In any case, the RPC recipient
+// must return k items (unless there are fewer than k nodes in all its k-buckets
+// combined, in which case it returns every node it knows about).
+func (kad *Kademlia) FindNode(key []byte) (*Node, error) {
+	contacts := kad.iterativeFindNode(key)
+	if contacts.Len() > 0 {
+		return contacts.Nodes()[0], nil
+	}
+	return nil, nil
 }
 
 // FindValue retrieves data from the network with a key
 func (kad *Kademlia) FindValue(key []byte) ([]byte, error) {
-	msg := compose(kad.table.Self).findValue(key)
-	kad.rpc.Write(msg)
-	return nil, nil
+	data := kad.iterativeFindValue(key)
+	return data, nil
 }
 
-// FindNode returns a node from the networking using key
-func (kad *Kademlia) FindNode(key []byte) (*Node, error) {
-	msg := compose(kad.table.Self).findNode(key)
-	kad.rpc.Write(msg)
-	return nil, nil
+func (kad *Kademlia) iterativeStore(data Hashable) {
+	contacts := kad.iterativeFindNode(data.Hash())
+	var wg sync.WaitGroup
+	for _, node := range contacts.Nodes() {
+		wg.Add(1)
+		go func(node *Node) {
+			defer wg.Done()
+			msg := compose(kad.table.Self).to(node).store(data)
+			kad.rpc.Write(msg)
+		}(node)
+	}
+	wg.Wait()
+}
+
+func (kad *Kademlia) iterativeFindNode(key []byte) *Contacts {
+	contacts := NewContacts(kad.table.Self)
+	nodes := kad.table.Kclosest(a, &Node{Hash: key})
+	if len(nodes) == 0 {
+		return nil
+	}
+	for _, node := range nodes {
+		msg := compose(kad.table.Self).to(node).findNode(key)
+		rec := kad.rpc.Write(msg)
+		switch out := <-rec(0); {
+		case out != nil:
+			for _, node := range out.GetClosest().GetNodes() {
+				contacts.Append(node)
+			}
+			kad.table.Update(node)
+		default:
+			kad.table.Remove(node)
+		}
+	}
+	return contacts
+}
+
+func (kad *Kademlia) iterativeFindValue(key []byte) []byte {
+	contacts := kad.iterativeFindNode(key)
+	var i int
+	for {
+		if i == contacts.Len()-1 {
+			break
+		}
+		node := contacts.Nodes()[i]
+		msg := compose(kad.table.Self).to(node).findValue(key)
+		rec := kad.rpc.Write(msg)
+		switch out := <-rec(0); {
+		case out != nil && out.GetPayload() != nil:
+			return out.GetPayload().GetData()
+		case out != nil && out.GetClosest() != nil:
+			for _, node := range out.GetClosest().GetNodes() {
+				contacts.Append(node)
+			}
+		}
+		i++
+	}
+	return nil
 }
 
 func (kad *Kademlia) listen() {

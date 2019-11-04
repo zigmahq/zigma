@@ -17,6 +17,8 @@
 package dht_test
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,50 +28,87 @@ import (
 )
 
 var (
-	kad1, kad2 *dht.Kademlia
-	n1, n2     *dht.Node
-	db1, db2   store.Store
+	n         = 100
+	kadList   = make([]*dht.Kademlia, n)
+	rpcList   = make([]dht.KademliaRPC, n)
+	nodeList  = make([]*dht.Node, n)
+	storeList = make([]store.Store, n)
 )
 
 func init() {
 	log.SetLevel(log.LogWarn)
-	db1 = store.TempBadgerStore()
-	db2 = store.TempBadgerStore()
+}
+
+func done() {
+	for i := 0; i < n; i++ {
+		db := storeList[i]
+		db.Close()
+	}
 }
 
 func TestNewKademlia(t *testing.T) {
-	n1 = dht.MockNode(0)
-	n2 = dht.MockNode(1)
-	r1 := dht.MockRPC(n1, true)
-	r2 := dht.MockRPC(n2)
+	for i := 0; i < n; i++ {
+		var (
+			db   = store.TempBadgerStore()
+			node = dht.MockNode(i)
+			rpc  = dht.MockRPC(node, i == 0)
+			kad  = dht.NewKademlia(node, db, rpc)
+		)
+		storeList[i] = db
+		nodeList[i] = node
+		rpcList[i] = rpc
+		kadList[i] = kad
 
-	kad1 = dht.NewKademlia(n1, db1, r1)
-	kad2 = dht.NewKademlia(n2, db2, r2)
-	assert.NotNil(t, kad1)
-	assert.NotNil(t, kad2)
-
-	kad1.Bootstrap(n2)
-	kad2.Bootstrap(n1)
+		assert.NotNil(t, db)
+		assert.NotNil(t, node)
+		assert.NotNil(t, rpc)
+		assert.NotNil(t, kad)
+	}
+	for i := 0; i < n; i++ {
+		kad := kadList[i]
+		for j := 0; j < n; j++ {
+			if j == i {
+				continue
+			}
+			node := nodeList[j]
+			kad.Bootstrap(node)
+		}
+	}
 }
 
 func TestKademliaPing(t *testing.T) {
-	ok := kad1.Ping(n2)
+	ok := kadList[0].Ping(nodeList[1])
 	assert.True(t, ok)
 
-	ok = kad2.Ping(n1)
+	ok = kadList[1].Ping(nodeList[2])
 	assert.True(t, ok)
 }
 
 func TestKademliaStore(t *testing.T) {
-	kad1.Store(dht.String("hello world 1"))
-	kad1.Store(dht.Bytes([]byte{0x68, 0x65, 0x6c, 0x6c, 0x6f}))
-	kad1.Store(dht.String("10101"))
+	for i := 0; i < 1000; i++ {
+		r := rand.Intn(n - 1)
+
+		hs := dht.String(fmt.Sprintf("hello world %v", i))
+		err := kadList[r].Store(hs)
+		assert.Nil(t, err)
+	}
 }
 
 func TestKademliaFindValue(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		r := rand.Intn(n - 1)
+
+		hs := dht.String(fmt.Sprintf("hello world %v", i))
+		b, _ := kadList[r].FindValue(hs.Hash())
+		assert.NotNil(t, b)
+	}
 }
 
 func TestKademliaFindNode(t *testing.T) {
-	defer db1.Close()
-	defer db2.Close()
+	defer done()
+	hs := dht.String("hello world")
+
+	node, err := kadList[0].FindNode(hs.Hash())
+	assert.Nil(t, err)
+	assert.NotNil(t, node)
 }
