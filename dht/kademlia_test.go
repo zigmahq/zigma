@@ -89,8 +89,8 @@ func TestKademliaStore(t *testing.T) {
 		r := rand.Intn(n - 1)
 
 		hs := dht.String(fmt.Sprintf("hello world %v", i))
-		err := kadList[r].Store(hs)
-		assert.Nil(t, err)
+		success := kadList[r].Store(hs)
+		assert.True(t, success > 0)
 	}
 }
 
@@ -108,7 +108,6 @@ func TestKademliaFindNode(t *testing.T) {
 	defer done()
 	hs := dht.String("hello world")
 
-	node, err := kadList[0].FindNode(hs.Hash())
-	assert.Nil(t, err)
+	node := kadList[0].FindNode(hs.Hash())
 	assert.NotNil(t, node)
 }

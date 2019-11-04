@@ -88,9 +88,8 @@ func (kad *Kademlia) Ping(node *Node) bool {
 
 // Store stores data on the network. A sha-256 encoded identifier will be returned
 // if the store operation is successful
-func (kad *Kademlia) Store(data Hashable) error {
-	kad.iterativeStore(data)
-	return nil
+func (kad *Kademlia) Store(data Hashable) int {
+	return kad.iterativeStore(data)
 }
 
 // FindNode returns a node from the networking using key
@@ -99,32 +98,39 @@ func (kad *Kademlia) Store(data Hashable) error {
 // k-buckets if the closest k-bucket is not full. In any case, the RPC recipient
 // must return k items (unless there are fewer than k nodes in all its k-buckets
 // combined, in which case it returns every node it knows about).
-func (kad *Kademlia) FindNode(key []byte) (*Node, error) {
+func (kad *Kademlia) FindNode(key []byte) *Node {
 	contacts := kad.iterativeFindNode(key)
 	if contacts.Len() > 0 {
-		return contacts.Nodes()[0], nil
+		return contacts.Nodes()[0]
 	}
-	return nil, nil
+	return nil
 }
 
 // FindValue retrieves data from the network with a key
-func (kad *Kademlia) FindValue(key []byte) ([]byte, error) {
-	data := kad.iterativeFindValue(key)
-	return data, nil
+func (kad *Kademlia) FindValue(key []byte) ([]byte, bool) {
+	return kad.iterativeFindValue(key)
 }
 
-func (kad *Kademlia) iterativeStore(data Hashable) {
+func (kad *Kademlia) iterativeStore(data Hashable) int {
 	contacts := kad.iterativeFindNode(data.Hash())
+	if contacts.Len() == 0 {
+		return 0
+	}
 	var wg sync.WaitGroup
+	var success int
 	for _, node := range contacts.Nodes() {
 		wg.Add(1)
 		go func(node *Node) {
 			defer wg.Done()
 			msg := compose(kad.table.Self).to(node).store(data)
-			kad.rpc.Write(msg)
+			rec := kad.rpc.Write(msg)
+			if out := <-rec(0); out != nil && out.GetSuccess() {
+				success++
+			}
 		}(node)
 	}
 	wg.Wait()
+	return success
 }
 
 func (kad *Kademlia) iterativeFindNode(key []byte) *Contacts {
@@ -146,10 +152,11 @@ func (kad *Kademlia) iterativeFindNode(key []byte) *Contacts {
 			kad.table.Remove(node)
 		}
 	}
+	contacts.Sort()
 	return contacts
 }
 
-func (kad *Kademlia) iterativeFindValue(key []byte) []byte {
+func (kad *Kademlia) iterativeFindValue(key []byte) ([]byte, bool) {
 	contacts := kad.iterativeFindNode(key)
 	var i int
 	for {
@@ -161,7 +168,7 @@ func (kad *Kademlia) iterativeFindValue(key []byte) []byte {
 		rec := kad.rpc.Write(msg)
 		switch out := <-rec(0); {
 		case out != nil && out.GetPayload() != nil:
-			return out.GetPayload().GetData()
+			return out.GetPayload().GetData(), true
 		case out != nil && out.GetClosest() != nil:
 			for _, node := range out.GetClosest().GetNodes() {
 				contacts.Append(node)
@@ -169,7 +176,7 @@ func (kad *Kademlia) iterativeFindValue(key []byte) []byte {
 		}
 		i++
 	}
-	return nil
+	return nil, false
 }
 
 func (kad *Kademlia) listen() {

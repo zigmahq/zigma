@@ -50,7 +50,7 @@ func (m *Message) store(payload Hashable) *Message {
 	m.Request = &Message_Store{
 		Store: &StoreRequest{
 			Payload: &Payload{
-				Key:  payload.Hash(),
+				Key:  payload.Key(),
 				Data: payload.Data(),
 				Hash: payload.Hash(),
 			},

@@ -63,7 +63,7 @@ func (m *mockRPC) Write(msg *Message) func(time.Duration) <-chan *Message {
 				if timeout > 0 {
 					t = timeout
 				} else {
-					t = time.Second
+					t = time.Second / 2
 				}
 				if d, ok := m.replies.Load(id); ok {
 					c = d.(chan *Message)
