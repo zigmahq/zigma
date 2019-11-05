@@ -70,9 +70,8 @@ type KademliaRPC interface {
 func (kad *Kademlia) Bootstrap(seeds ...*Node) {
 	for _, seed := range seeds {
 		go func(node *Node) {
-			if kad.Ping(node) {
-				kad.table.Update(node)
-			}
+			kad.table.Update(node)
+			kad.Ping(node)
 		}(seed)
 	}
 }
