@@ -93,6 +93,72 @@ func (r *RoutingTable) Remove(node *Node) {
 	bucket.Remove(node)
 }
 
+// Size returns the total number of nodes in routing table
+func (r *RoutingTable) Size() int {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	var n int
+	for i := 0; i < len(r.Buckets); i++ {
+		n += r.Buckets[i].Len()
+	}
+	return n
+}
+
+// BucketsNeededForRefresh returns a list of bucket index that needed for refresh
+func (r *RoutingTable) BucketsNeededForRefresh() <-chan int {
+	ch := make(chan int, len(r.refresh))
+	go func() {
+		r.mutex.RLock()
+		defer r.mutex.RUnlock()
+		defer close(ch)
+
+		for i := 0; i < len(r.refresh); i++ {
+			if r.shouldBucketRefresh(i) {
+				ch <- i
+			}
+		}
+	}()
+	return ch
+}
+
+// MarkBucketRefreshed marks a bucket refreshed
+func (r *RoutingTable) MarkBucketRefreshed(idx int) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if idx > len(r.refresh)-1 {
+		return
+	}
+	r.refresh[idx] = time.Now()
+}
+
+// RandomNodeFromBucket returns a random node picked from specified bucket
+func (r *RoutingTable) RandomNodeFromBucket(idx int) *Node {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	if idx > len(r.Buckets)-1 {
+		return nil
+	}
+	bucket := r.Buckets[idx]
+	for node := range bucket.Iterator() {
+		return node
+	}
+	return nil
+}
+
+func (r *RoutingTable) shouldBucketRefresh(idx int) bool {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	if idx > len(r.refresh)-1 {
+		return false
+	}
+	at := r.refresh[idx]
+	return at.IsZero() || time.Since(at) > tRefresh
+}
+
 func (r *RoutingTable) shouldUpdateBucketCap(node *Node) {
 	if b := len(node.Hash) * 8; b > r.b {
 		r.mutex.Lock()
@@ -109,18 +175,6 @@ func (r *RoutingTable) shouldUpdateBucketCap(node *Node) {
 		r.refresh = append(r.refresh, o...)
 		r.b = b
 	}
-}
-
-// Size returns the total number of nodes in routing table
-func (r *RoutingTable) Size() int {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-
-	var n int
-	for i := 0; i < len(r.Buckets); i++ {
-		n += r.Buckets[i].Len()
-	}
-	return n
 }
 
 // NewRoutingTable initializes a new hashtable instance

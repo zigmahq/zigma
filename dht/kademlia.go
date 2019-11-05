@@ -50,10 +50,10 @@ const (
 
 // Kademlia represents the state of the local node in the distributed hash table
 type Kademlia struct {
-	table *RoutingTable
-	store store.Store
 	rpc   KademliaRPC
 	stop  chan struct{}
+	store *KademliaStore
+	table *RoutingTable
 }
 
 // KademliaReplyFn represents the wait-for-response function for KademliaRPC, passing
@@ -91,8 +91,14 @@ func (kad *Kademlia) Table() *RoutingTable {
 func (kad *Kademlia) Ping(node *Node) bool {
 	msg := compose(kad.table.Self).to(node).ping()
 	rec := kad.rpc.Write(msg)
-	out := <-rec(0)
-	return out != nil
+	switch out := <-rec(0); {
+	case out != nil:
+		kad.table.Update(node)
+		return true
+	default:
+		kad.table.Remove(node)
+		return false
+	}
 }
 
 // Store stores data on the network. A sha-256 encoded identifier will be returned
@@ -249,14 +255,19 @@ func (kad *Kademlia) listen() {
 }
 
 func (kad *Kademlia) refreshBuckets() {
-	for i, at := range kad.table.refresh {
-		if at.IsZero() || time.Since(at) > tRefresh {
-			kad.table.refresh[i] = time.Now()
+	for idx := range kad.table.BucketsNeededForRefresh() {
+		if node := kad.table.RandomNodeFromBucket(idx); node != nil {
+			if kad.iterativeFindNode(node.Id).Len() > 0 {
+				kad.table.MarkBucketRefreshed(idx)
+			}
 		}
 	}
 }
 
-func (kad *Kademlia) storeReplication() {
+func (kad *Kademlia) replicaDatabase() {
+	for hashable := range kad.store.PendingReplication() {
+		kad.Store(hashable)
+	}
 }
 
 func (kad *Kademlia) scheduleTasks() {
@@ -264,8 +275,8 @@ func (kad *Kademlia) scheduleTasks() {
 	for {
 		select {
 		case <-ticker.C:
-			kad.storeReplication()
-			kad.refreshBuckets()
+			go kad.replicaDatabase()
+			go kad.refreshBuckets()
 		case <-kad.stop:
 			ticker.Stop()
 			return
@@ -275,13 +286,14 @@ func (kad *Kademlia) scheduleTasks() {
 
 // NewKademlia initializes a DHT kademlia service
 func NewKademlia(self *Node, store store.Store, rpc KademliaRPC) *Kademlia {
-	t := NewRoutingTable(self)
 	s := make(chan struct{})
+	t := NewRoutingTable(self)
+	r := NewKademliaStore(store)
 	k := &Kademlia{
-		table: t,
-		stop:  s,
-		store: store,
 		rpc:   rpc,
+		stop:  s,
+		store: r,
+		table: t,
 	}
 	go k.listen()
 	go k.scheduleTasks()

@@ -26,14 +26,14 @@ type Hashable interface {
 }
 
 type hashable struct {
-	customKey []byte
-	data      []byte
-	hash      []byte
+	key  []byte
+	data []byte
+	hash []byte
 }
 
 func (h *hashable) Key() []byte {
-	if len(h.customKey) > 0 {
-		return h.customKey
+	if len(h.key) > 0 {
+		return h.key
 	}
 	return h.Hash()
 }
